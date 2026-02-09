@@ -27,13 +27,14 @@ import TableHead from "@material-ui/core/TableHead";
 import TableCell from "@material-ui/core/TableCell";
 import TableRow from "@material-ui/core/TableRow";
 import Paper from "@material-ui/core/Paper";
-import { Title, GET_MANY_REFERENCE, GET_ONE } from "react-admin";
+import { Title, GET_MANY_REFERENCE, GET_ONE, UPDATE } from "react-admin";
 import TextField from "@material-ui/core/TextField";
 import Button from "@material-ui/core/Button";
 import { fetchReticulumAuthenticated, getDirectReticulumFetchUrl } from "hubs/src/utils/phoenix-utils";
 import { proxiedUrlFor } from "hubs/src/utils/media-url-utils";
 import { ensureAvatarMaterial } from "hubs/src/utils/avatar-utils";
 import { getAvatarSkeletonMetadata } from "hubs/src/utils/avatar-skeleton-utils";
+import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import clsx from "classnames";
 import { sceneApproveNew, sceneApproveExisting, sceneReviewed } from "./scene-actions";
@@ -49,6 +50,50 @@ const RESULTS = {
 };
 
 const AVATARS_API = "/api/v1/avatars";
+
+const AVATAR_THUMBNAIL_WIDTH = 720;
+const AVATAR_THUMBNAIL_HEIGHT = 1280;
+const ORBIT_ANGLE = new THREE.Euler(-30 * THREE.MathUtils.DEG2RAD, 30 * THREE.MathUtils.DEG2RAD, 0);
+
+function fitBoxInFrustum(camera, box, center, margin = 1) {
+  const halfYExtents = Math.max(box.max.y - center.y, center.y - box.min.y);
+  const halfVertFOV = THREE.MathUtils.degToRad(camera.fov / 2);
+  camera.position.set(0, 0, (halfYExtents / Math.tan(halfVertFOV) + box.max.z) * margin);
+  camera.position.applyEuler(ORBIT_ANGLE);
+  camera.position.add(center);
+  camera.lookAt(center);
+}
+
+function disposeObject3D(root) {
+  if (!root) return;
+  root.traverse(node => {
+    if (!node.isMesh) return;
+    if (node.geometry) node.geometry.dispose();
+
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    for (const material of materials) {
+      if (!material) continue;
+      const maps = [
+        "map",
+        "lightMap",
+        "aoMap",
+        "emissiveMap",
+        "bumpMap",
+        "normalMap",
+        "displacementMap",
+        "roughnessMap",
+        "metalnessMap",
+        "alphaMap",
+        "envMap"
+      ];
+      for (const key of maps) {
+        const tex = material[key];
+        if (tex && typeof tex.dispose === "function") tex.dispose();
+      }
+      if (typeof material.dispose === "function") material.dispose();
+    }
+  });
+}
 
 // GLTFLoader plugin for splitting glTF and bin from a local GLB.
 class GLTFBinarySplitterPlugin {
@@ -93,6 +138,23 @@ class ImportContentComponent extends Component {
     baseAvatarListingId: null,
     baseAvatarBaseGltfUrl: null
   };
+
+  componentWillUnmount() {
+    // Clean up any blob URLs we created for local preview thumbnails.
+    this.revokeLocalPreviewUrls(this.state.imports);
+  }
+
+  revokeLocalPreviewUrls(imports) {
+    for (const record of imports || []) {
+      if (record.localThumbnailPreviewUrl) {
+        try {
+          URL.revokeObjectURL(record.localThumbnailPreviewUrl);
+        } catch {
+          // Ignore
+        }
+      }
+    }
+  }
 
   handleUrlChanged(ev) {
     this.setState({ urls: ev.target.value });
@@ -203,7 +265,9 @@ class ImportContentComponent extends Component {
       localFile = null,
       previewUnavailable = false,
       autoTags = [],
-      skeletonMetadata = null
+      skeletonMetadata = null,
+      localThumbnailFile = null,
+      localThumbnailPreviewUrl = null
     } = options;
 
     this.setState(state => ({
@@ -224,7 +288,9 @@ class ImportContentComponent extends Component {
           localFile,
           previewUnavailable,
           autoTags,
-          skeletonMetadata
+          skeletonMetadata,
+          localThumbnailFile,
+          localThumbnailPreviewUrl
         }
       ]
     }));
@@ -281,6 +347,7 @@ class ImportContentComponent extends Component {
     const { needsBaseAvatar, needsDefaultAvatar, needsDefaultScene } = this.getImportDefaults();
 
     let hadUrl = false;
+    this.revokeLocalPreviewUrls(this.state.imports);
     await new Promise(r => this.setState({ imports: [] }, r));
     this.setState({ isLoading: true });
 
@@ -366,16 +433,31 @@ class ImportContentComponent extends Component {
       if (skeletonMetadata.isRpmLike) autoTags.push("rpm");
       if (skeletonMetadata.isFullBody) autoTags.push("fullbody");
 
-      this.addImport(
-        importId,
-        null,
-        "avatars",
-        { name: file.name, files: {} },
-        needsDefaultAvatar,
-        setBaseOnThisAvatar,
-        true,
-        { isLocal: true, localFile: file, previewUnavailable: true, autoTags, skeletonMetadata }
-      );
+      let localThumbnailFile = null;
+      let localThumbnailPreviewUrl = null;
+      try {
+        localThumbnailFile = await this.createLocalAvatarThumbnail(file);
+        localThumbnailPreviewUrl = URL.createObjectURL(localThumbnailFile);
+      } catch (error) {
+        console.warn(`Failed to generate thumbnail preview for ${file.name}. Falling back to placeholder.`, error);
+        localThumbnailFile = await this.createPlaceholderThumbnail(file.name);
+        localThumbnailPreviewUrl = URL.createObjectURL(localThumbnailFile);
+      }
+
+      const asset = { name: file.name, files: {} };
+      if (localThumbnailPreviewUrl) {
+        asset.files.thumbnail = localThumbnailPreviewUrl;
+      }
+
+      this.addImport(importId, null, "avatars", asset, needsDefaultAvatar, setBaseOnThisAvatar, true, {
+        isLocal: true,
+        localFile: file,
+        previewUnavailable: !localThumbnailPreviewUrl,
+        autoTags,
+        skeletonMetadata,
+        localThumbnailFile,
+        localThumbnailPreviewUrl
+      });
 
       setBaseOnThisAvatar = false;
     }
@@ -421,17 +503,84 @@ class ImportContentComponent extends Component {
 
   async createPlaceholderThumbnail(fileName) {
     const canvas = document.createElement("canvas");
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = AVATAR_THUMBNAIL_WIDTH;
+    canvas.height = AVATAR_THUMBNAIL_HEIGHT;
     const context = canvas.getContext("2d");
     context.fillStyle = "#4b5563";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = "#d1d5db";
-    context.fillRect(8, 8, canvas.width - 16, canvas.height - 16);
+    context.fillRect(32, 32, canvas.width - 64, canvas.height - 64);
 
     const thumbnailBlob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
     return new File([thumbnailBlob], `${fileName.replace(/\.[^.]+$/, "") || "avatar"}-thumbnail.png`, {
       type: "image/png"
+    });
+  }
+
+  async createLocalAvatarThumbnail(glbFile) {
+    const gltfLoader = new GLTFLoader();
+    const gltfUrl = URL.createObjectURL(glbFile);
+
+    try {
+      const gltf = await new Promise((resolve, reject) => {
+        gltfLoader.load(gltfUrl, resolve, undefined, reject);
+      });
+
+      const blob = await this.snapshotAvatarObject3D(gltf.scene);
+      const baseName = (glbFile && glbFile.name ? glbFile.name : "avatar").replace(/\.[^.]+$/, "");
+      return new File([blob], `${baseName || "avatar"}-thumbnail.png`, { type: "image/png" });
+    } finally {
+      URL.revokeObjectURL(gltfUrl);
+    }
+  }
+
+  snapshotAvatarObject3D(object3D) {
+    return new Promise(resolve => {
+      const canvas = document.createElement("canvas");
+      canvas.width = AVATAR_THUMBNAIL_WIDTH;
+      canvas.height = AVATAR_THUMBNAIL_HEIGHT;
+
+      const context = canvas.getContext("webgl2", {
+        alpha: true,
+        depth: true,
+        antialias: true,
+        premultipliedAlpha: true,
+        preserveDrawingBuffer: false,
+        powerPreference: "default"
+      });
+
+      const renderer = new THREE.WebGLRenderer({ alpha: true, canvas, context });
+      renderer.physicallyCorrectLights = true;
+      renderer.setSize(AVATAR_THUMBNAIL_WIDTH, AVATAR_THUMBNAIL_HEIGHT, false);
+      renderer.setClearColor(0x000000, 0);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(55, AVATAR_THUMBNAIL_WIDTH / AVATAR_THUMBNAIL_HEIGHT, 0.1, 1000);
+
+      const dirLight = new THREE.DirectionalLight(0xf7f6ef, 1);
+      dirLight.position.set(0, 10, 10);
+      scene.add(dirLight);
+      scene.add(new THREE.HemisphereLight(0xb1e3ff, 0xb1e3ff, 2.5));
+
+      scene.add(object3D);
+
+      const box = new THREE.Box3().setFromObject(object3D);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      center.y = (box.max.y - box.min.y) * 0.6 + box.min.y;
+      fitBoxInFrustum(camera, box, center, 0.7);
+
+      renderer.render(scene, camera);
+
+      canvas.toBlob(blob => {
+        try {
+          renderer.dispose();
+        } catch {
+          // Ignore
+        }
+        disposeObject3D(object3D);
+        resolve(blob);
+      }, "image/png");
     });
   }
 
@@ -509,7 +658,16 @@ class ImportContentComponent extends Component {
     }
 
     const { gltf, bin } = await this.splitGlbIntoFiles(localFile);
-    const thumbnail = await this.createPlaceholderThumbnail(localFile.name);
+    const thumbnail =
+      importRecord.localThumbnailFile ||
+      (await (async () => {
+        try {
+          return await this.createLocalAvatarThumbnail(localFile);
+        } catch (error) {
+          console.warn(`Failed to generate thumbnail for ${localFile.name}. Falling back to placeholder.`, error);
+          return this.createPlaceholderThumbnail(localFile.name);
+        }
+      })());
 
     const uploadResults = await Promise.all([
       this.uploadOwnedFile(gltf, "model/gltf"),
@@ -521,6 +679,7 @@ class ImportContentComponent extends Component {
       name: this.avatarNameFromFile(localFile.name),
       base_gltf_url: baseAvatarBaseGltfUrl,
       parent_avatar_listing_id: baseAvatarListingId,
+      allow_promotion: true,
       files: {
         gltf: [uploadResults[0].file_id, uploadResults[0].meta.access_token, uploadResults[0].meta.promotion_token],
         bin: [uploadResults[1].file_id, uploadResults[1].meta.access_token, uploadResults[1].meta.promotion_token],
@@ -565,6 +724,19 @@ class ImportContentComponent extends Component {
     const reviewed = isScene ? sceneReviewed : avatarReviewed;
     const dataProvider = window.APP.dataProvider;
     const objectRecord = await this.resolveImportedObject(dataProvider, importRecord.type, columnPrefix, asset);
+
+    // Featured listings are only visible when the underlying object is promotable.
+    // For admin imports we want them to be immediately usable as Featured/default/base, etc.
+    try {
+      if (objectRecord && !objectRecord.allow_promotion) {
+        await dataProvider(UPDATE, importRecord.type, { id: objectRecord.id, data: { allow_promotion: true } });
+      }
+    } catch (e) {
+      console.warn(
+        `Failed to set allow_promotion on imported ${importRecord.type} record ${objectRecord && objectRecord.id}.`,
+        e
+      );
+    }
 
     const listingRes = await dataProvider(GET_MANY_REFERENCE, `${columnPrefix}_listings`, {
       sort: { field: "id", order: "desc" },

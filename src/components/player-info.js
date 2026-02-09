@@ -10,26 +10,147 @@ import { LocalAvatar, RemoteAvatar } from "../bit-components";
 
 function ensureAvatarNodes(json) {
   const { nodes } = json;
-  if (!nodes.some(node => node.name === "Head")) {
-    // If the avatar model doesn't have a Head node. The user has probably chosen a custom GLB.
-    // So, we need to construct a suitable hierarchy for avatar functionality to work.
-    // We re-parent the original root node to the Head node and set the scene root to a new AvatarRoot.
 
+  const normalizeNodeName = name => {
+    if (!name) return name;
+
+    // Remove common namespace separators (e.g. "mixamorig:Hips", "Armature|Hips")
+    const lastNsSep = Math.max(name.lastIndexOf(":"), name.lastIndexOf("|"));
+    let out = lastNsSep >= 0 ? name.slice(lastNsSep + 1) : name;
+
+    // Some exporters strip ':' but keep the prefix (e.g. "mixamorigHips")
+    const lower = out.toLowerCase();
+    if (lower.startsWith("mixamorig") && out.length > "mixamorig".length) {
+      out = out.slice("mixamorig".length);
+    }
+
+    return out;
+  };
+
+  const normalizeHumanoidNodeNames = () => {
+    // These names are expected by Hubs templates/IK and by our basic full-body locomotion.
+    const desiredNames = [
+      "Hips",
+      "Spine",
+      "Spine1",
+      "Spine2",
+      "Neck",
+      "Head",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftForeArm",
+      "LeftHand",
+      "RightShoulder",
+      "RightArm",
+      "RightForeArm",
+      "RightHand",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase"
+    ];
+
+    const desiredByLower = new Map(desiredNames.map(n => [n.toLowerCase(), n]));
+    const existingLower = new Set(nodes.map(n => n.name && n.name.toLowerCase()).filter(Boolean));
+    const candidatesByLower = new Map();
+
+    for (let i = 0; i < nodes.length; i++) {
+      const name = nodes[i].name;
+      if (!name) continue;
+      const normalized = normalizeNodeName(name);
+      if (!normalized) continue;
+      const key = normalized.toLowerCase();
+      if (!desiredByLower.has(key)) continue;
+      if (!candidatesByLower.has(key)) candidatesByLower.set(key, []);
+      candidatesByLower.get(key).push(i);
+    }
+
+    for (const [desiredLower, desiredName] of desiredByLower.entries()) {
+      if (existingLower.has(desiredLower)) continue;
+      const candidates = candidatesByLower.get(desiredLower);
+      if (!candidates || candidates.length !== 1) continue;
+
+      nodes[candidates[0]].name = desiredName;
+      existingLower.add(desiredLower);
+    }
+  };
+
+  // Hubs avatar functionality (IK, hover targets, etc) is attached via templates in hub.html,
+  // which key off node names like "AvatarRoot", "Spine", "LeftHand", etc. Many RPM/Mixamo
+  // GLBs prefix bone names (e.g. "mixamorig:Hips"), and often omit "AvatarRoot", which can
+  // prevent avatar templates/IK from being applied and results in a static avatar.
+  normalizeHumanoidNodeNames();
+
+  if (!nodes.some(node => node.name === "AvatarRoot")) {
     // Note: We assume that the first node in the primary scene is the one we care about.
     const originalRoot = json.scenes[json.scene].nodes[0];
-    nodes.push({ name: "LeftEye", extensions: { MOZ_hubs_components: {} } });
-    nodes.push({ name: "RightEye", extensions: { MOZ_hubs_components: {} } });
-    nodes.push({
-      name: "Head",
-      children: [originalRoot, nodes.length - 1, nodes.length - 2],
-      extensions: { MOZ_hubs_components: { "scale-audio-feedback": "" } }
-    });
-    nodes.push({ name: "Neck", children: [nodes.length - 1] });
-    nodes.push({ name: "Spine", children: [nodes.length - 1] });
-    nodes.push({ name: "Hips", children: [nodes.length - 1] });
-    nodes.push({ name: "AvatarRoot", children: [nodes.length - 1] });
+
+    const requiredNodes = ["Hips", "Spine", "Neck", "Head", "LeftHand", "RightHand"];
+    const hasRequiredNodes = requiredNodes.every(n => nodes.some(node => node.name === n));
+
+    if (!hasRequiredNodes) {
+      // If the avatar model doesn't have the basic Hubs node names, the user has probably chosen a custom GLB.
+      // Construct a suitable hierarchy for avatar functionality to work by wrapping the existing root.
+      nodes.push({ name: "LeftEye", extensions: { MOZ_hubs_components: {} } });
+      nodes.push({ name: "RightEye", extensions: { MOZ_hubs_components: {} } });
+      nodes.push({
+        name: "Head",
+        children: [originalRoot, nodes.length - 1, nodes.length - 2],
+        extensions: { MOZ_hubs_components: { "scale-audio-feedback": "" } }
+      });
+      nodes.push({ name: "Neck", children: [nodes.length - 1] });
+      nodes.push({ name: "Spine", children: [nodes.length - 1] });
+      nodes.push({ name: "Hips", children: [nodes.length - 1] });
+      nodes.push({ name: "AvatarRoot", children: [nodes.length - 1] });
+      json.scenes[json.scene].nodes[0] = nodes.length - 1;
+      return json;
+    }
+
+    // Otherwise, we already have a humanoid-ish skeleton with the expected node names.
+    // Just add an AvatarRoot wrapper so that hub.html templates attach ik-controller.
+    nodes.push({ name: "AvatarRoot", children: [originalRoot] });
     json.scenes[json.scene].nodes[0] = nodes.length - 1;
+
+    // Ensure LeftEye/RightEye exist so ik-controller doesn't break on skeletons without eye bones.
+    const hasLeftEye = nodes.some(node => node.name === "LeftEye");
+    const hasRightEye = nodes.some(node => node.name === "RightEye");
+    if (!hasLeftEye || !hasRightEye) {
+      const headIndex = nodes.findIndex(node => node.name === "Head");
+      if (headIndex !== -1) {
+        const eyeChildIndices = [];
+        const eyeOffsetX = 0.03;
+        const eyeOffsetY = 0.06;
+        const eyeOffsetZ = 0.09;
+
+        if (!hasLeftEye) {
+          nodes.push({
+            name: "LeftEye",
+            translation: [-eyeOffsetX, eyeOffsetY, eyeOffsetZ],
+            extensions: { MOZ_hubs_components: {} }
+          });
+          eyeChildIndices.push(nodes.length - 1);
+        }
+
+        if (!hasRightEye) {
+          nodes.push({
+            name: "RightEye",
+            translation: [eyeOffsetX, eyeOffsetY, eyeOffsetZ],
+            extensions: { MOZ_hubs_components: {} }
+          });
+          eyeChildIndices.push(nodes.length - 1);
+        }
+
+        if (eyeChildIndices.length > 0) {
+          nodes[headIndex].children = (nodes[headIndex].children || []).concat(eyeChildIndices);
+        }
+      }
+    }
   }
+
   return json;
 }
 

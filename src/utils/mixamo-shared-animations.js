@@ -3,9 +3,10 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import idleGlbUrl from "../assets/animations/mixamo/idle.glb";
 import walkGlbUrl from "../assets/animations/mixamo/walk.glb";
 
-// For the MVP we only use leg rotations so we don't fight ik-controller's
-// head-offset math (which assumes a mostly-static head chain).
-const LEG_BONES = new Set([
+// We deliberately do NOT animate hips/spine/neck/head or any translations so we don't
+// fight ik-controller's head-offset math (which assumes a mostly-static head chain).
+// The goal is "looks alive while moving" without risking avatar/camera alignment bugs.
+const LOCOMOTION_BONES = new Set([
   "LeftUpLeg",
   "LeftLeg",
   "LeftFoot",
@@ -13,7 +14,13 @@ const LEG_BONES = new Set([
   "RightUpLeg",
   "RightLeg",
   "RightFoot",
-  "RightToeBase"
+  "RightToeBase",
+  "LeftShoulder",
+  "LeftArm",
+  "LeftForeArm",
+  "RightShoulder",
+  "RightArm",
+  "RightForeArm"
 ]);
 
 const normalizeNodeName = name => {
@@ -67,7 +74,7 @@ function filterAndRetargetLocomotionClip(clip) {
 
     const rawNodeName = parts.slice(0, -1).join(".");
     const nodeName = normalizeNodeName(rawNodeName);
-    if (!LEG_BONES.has(nodeName)) continue;
+    if (!LOCOMOTION_BONES.has(nodeName)) continue;
 
     const cloned = track.clone();
     cloned.name = `${nodeName}.quaternion`;

@@ -19,7 +19,7 @@ export function AvatarUrlModal({ onSubmit, onClose }) {
         <TextInputField
           label={<FormattedMessage id="avatar-url-modal.avatar-url-label" defaultMessage="Avatar GLB URL" />}
           placeholder="https://example.com/avatar.glb"
-          type="url"
+          type="text"
           {...register("url", {
             required: true
           })}

@@ -1,9 +1,38 @@
 import { hasReticulumServer } from "./phoenix-utils";
 import configs from "./configs";
 
-const nonCorsProxyDomains = (configs.NON_CORS_PROXY_DOMAINS || "").split(",");
-if (configs.CORS_PROXY_SERVER) {
-  nonCorsProxyDomains.push(configs.CORS_PROXY_SERVER.split(":")[0]);
+const asUrl = value => {
+  if (!value) return null;
+
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return null;
+
+  const withProtocol = trimmedValue.match(/^https?:\/\//i) ? trimmedValue : `https://${trimmedValue}`;
+
+  try {
+    return new URL(withProtocol);
+  } catch {
+    return null;
+  }
+};
+
+const pathPrefixFor = parsedUrl => {
+  if (!parsedUrl) return null;
+  return parsedUrl.pathname === "/" ? parsedUrl.origin : `${parsedUrl.origin}${parsedUrl.pathname.replace(/\/$/, "")}`;
+};
+
+const corsProxyServerUrl = asUrl(configs.CORS_PROXY_SERVER);
+const corsProxyPrefix = pathPrefixFor(corsProxyServerUrl);
+const thumbnailServerUrl = asUrl(configs.THUMBNAIL_SERVER);
+const thumbnailServerPrefix = pathPrefixFor(thumbnailServerUrl);
+
+const nonCorsProxyDomains = (configs.NON_CORS_PROXY_DOMAINS || "")
+  .split(",")
+  .map(domain => domain.trim())
+  .filter(Boolean);
+
+if (corsProxyServerUrl) {
+  nonCorsProxyDomains.push(corsProxyServerUrl.hostname);
 }
 nonCorsProxyDomains.push(document.location.hostname);
 
@@ -37,6 +66,10 @@ const farsparkEncodeUrl = url => {
 };
 
 export const scaledThumbnailUrlFor = (url, width, height) => {
+  if (!thumbnailServerPrefix) {
+    return url;
+  }
+
   let extension = "";
   try {
     const pathParts = new URL(url).pathname.split(".");
@@ -53,9 +86,7 @@ export const scaledThumbnailUrlFor = (url, width, height) => {
   }
 
   // HACK: the extension is needed to ensure CDN caching on Cloudflare
-  const thumbnailUrl = `https://${configs.THUMBNAIL_SERVER}/thumbnail/${farsparkEncodeUrl(
-    url
-  )}${extension}?w=${width}&h=${height}`;
+  const thumbnailUrl = `${thumbnailServerPrefix}/thumbnail/${farsparkEncodeUrl(url)}${extension}?w=${width}&h=${height}`;
 
   try {
     const urlHostname = new URL(url).hostname;
@@ -87,7 +118,9 @@ export const proxiedUrlFor = url => {
     // Ignore
   }
 
-  return `https://${configs.CORS_PROXY_SERVER}/${url}`;
+  if (!corsProxyPrefix) return url;
+
+  return `${corsProxyPrefix}/${url}`;
 };
 
 export function getAbsoluteUrl(baseUrl, relativeUrl) {
@@ -130,18 +163,18 @@ export const getCustomGLTFParserURLResolver = gltfUrl => url => {
   if (/^data:.*,.*$/i.test(url)) return url;
   if (/^blob:.*$/i.test(url)) return url;
 
-  if (configs.CORS_PROXY_SERVER) {
+  if (corsProxyPrefix) {
     // For absolute paths with a CORS proxied gltf URL, re-write the url properly to be proxied
-    const corsProxyPrefix = `https://${configs.CORS_PROXY_SERVER}/`;
+    const corsProxyPrefixWithSlash = `${corsProxyPrefix}/`;
 
-    if (gltfUrl.startsWith(corsProxyPrefix)) {
-      const originalUrl = decodeURIComponent(gltfUrl.substring(corsProxyPrefix.length));
+    if (gltfUrl.startsWith(corsProxyPrefixWithSlash)) {
+      const originalUrl = decodeURIComponent(gltfUrl.substring(corsProxyPrefixWithSlash.length));
       const originalUrlParts = originalUrl.split("/");
 
       // Drop the .gltf filename
       const path = new URL(url).pathname;
       const assetUrl = originalUrlParts.slice(0, originalUrlParts.length - 1).join("/") + "/" + path;
-      return corsProxyPrefix + assetUrl;
+      return corsProxyPrefixWithSlash + assetUrl;
     }
   }
 

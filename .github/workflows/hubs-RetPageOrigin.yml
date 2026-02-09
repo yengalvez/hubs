@@ -19,6 +19,9 @@ on:
 
 jobs:
   turkeyGitops:
+    # This workflow is intended for Hubs Foundation infra (turkey). In forks, required secrets are
+    # usually not configured and the run will fail noisily on every push. Skip unless secrets exist.
+    if: ${{ secrets.DOCKER_HUB_PWD != '' && secrets.GCP_TURKEYGITOPS_SA_JSON != '' && secrets.BLDR_HAB_TOKEN != '' && secrets.BLDR_RET_TOKEN != '' && secrets.BLDR_RET_PUB_B64 != '' && secrets.BLDR_HAB_PVT_B64 != '' }}
     uses: Hubs-Foundation/hubs-ops/.github/workflows/turkeyGitops.yml@master
     with:
       registry: hubsfoundation

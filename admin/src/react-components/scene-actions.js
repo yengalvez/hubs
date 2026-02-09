@@ -41,6 +41,9 @@ export const sceneApproveExisting = scene => ({
       model_owned_file_id: scene.model_owned_file_id,
       scene_owned_file_id: scene.scene_owned_file_id,
       screenshot_owned_file_id: scene.screenshot_owned_file_id,
+      // Reticulum may auto-create delisted listings for new scenes. When an admin "approves",
+      // make the listing publicly visible.
+      state: "active",
       updated_at: new Date()
     }
   },

@@ -26,6 +26,12 @@ function FeatureListingButton(props) {
               } else if (resource === "scene_listings" && record && record.scene_id) {
                 await dataProvider(UPDATE, "scenes", { id: record.scene_id, data: { allow_promotion: true } });
               }
+
+              // Featured lists only include active listings. If a listing is delisted, "Feature" should
+              // activate it so it shows up immediately (and also in user avatar pickers).
+              if (record && record.id) {
+                await dataProvider(UPDATE, resource, { id: record.id, data: { state: "active" } });
+              }
             }
           } catch (e) {
             console.warn("Failed to set allow_promotion for featured listing.", e);

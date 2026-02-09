@@ -59,6 +59,9 @@ export const avatarApproveExisting = avatar => ({
       normal_map_owned_file_id: avatar.normal_map_owned_file_id,
       orm_map_owned_file_id: avatar.orm_map_owned_file_id,
 
+      // Reticulum may auto-create delisted listings for new avatars. When an admin "approves",
+      // make the listing publicly visible.
+      state: "active",
       updated_at: new Date()
     }
   },

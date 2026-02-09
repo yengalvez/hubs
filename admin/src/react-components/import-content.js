@@ -172,8 +172,18 @@ class ImportContentComponent extends Component {
 
   async updateBaseAvatarListingId() {
     try {
-      const { entries } = await fetchReticulumAuthenticated(`/api/v1/media/search?filter=base&source=avatar_listings`);
-      const baseEntry = entries && entries[0];
+      const findBaseEntry = entries => (entries || []).find(entry => entry && entry.gltfs && entry.gltfs.base);
+
+      // Prefer an explicitly-tagged base avatar listing (filter=base).
+      const baseResponse = await fetchReticulumAuthenticated(`/api/v1/media/search?filter=base&source=avatar_listings`);
+      let baseEntry = findBaseEntry(baseResponse && baseResponse.entries) || (baseResponse && baseResponse.entries[0]);
+
+      // Fallback: pick any avatar listing that provides a base glTF (typically the built-in base bot).
+      if (!baseEntry || !baseEntry.gltfs || !baseEntry.gltfs.base) {
+        const fallbackResponse = await fetchReticulumAuthenticated(`/api/v1/media/search?source=avatar_listings`);
+        baseEntry = findBaseEntry(fallbackResponse && fallbackResponse.entries);
+      }
+
       const baseAvatarListingId = baseEntry && baseEntry.id;
       const baseAvatarBaseGltfUrl = baseEntry && baseEntry.gltfs && baseEntry.gltfs.base;
 
@@ -189,7 +199,7 @@ class ImportContentComponent extends Component {
 
       return baseAvatarListingId || null;
     } catch (e) {
-      console.warn("Failed to fetch base avatar listings.", e);
+      console.warn("Failed to fetch base avatar listing info.", e);
       await new Promise(resolve => this.setState({ baseAvatarListingId: null, baseAvatarBaseGltfUrl: null }, resolve));
       return null;
     }
@@ -344,8 +354,6 @@ class ImportContentComponent extends Component {
     const urls = this.state.urls.split(/[, ]+/).filter(u => u.length > 0);
     if (!urls.find(u => u.length !== 0)) return;
 
-    const { needsBaseAvatar, needsDefaultAvatar, needsDefaultScene } = this.getImportDefaults();
-
     let hadUrl = false;
     this.revokeLocalPreviewUrls(this.state.imports);
     await new Promise(r => this.setState({ imports: [] }, r));
@@ -376,16 +384,12 @@ class ImportContentComponent extends Component {
       }
     }
 
-    let firstAvatar = true;
-
     for (let i = 0; i < importableUrls.length; i++) {
       const url = importableUrls[i];
       const apiInfo = this.apiInfoForSubmittedUrl(url);
       if (!apiInfo) continue;
 
-      const { url: importUrl, isScene, type } = apiInfo;
-      const isAvatar = !isScene;
-
+      const { url: importUrl, type } = apiInfo;
       if (!importUrl) continue;
 
       let asset = null;
@@ -398,10 +402,8 @@ class ImportContentComponent extends Component {
         asset = this.createFallbackAsset(url);
       }
 
-      const isDefault = (isScene && needsDefaultScene) || (isAvatar && needsDefaultAvatar);
-      const isBase = isAvatar && needsBaseAvatar && firstAvatar; // Only set first avatar to be base by default
-      this.addImport(url, importUrl, type, asset, isDefault, isBase, true, { previewUnavailable });
-      if (isAvatar) firstAvatar = false;
+      // Default all flags to off: admins can explicitly choose base/default/featured before importing.
+      this.addImport(url, importUrl, type, asset, false, false, false, { previewUnavailable });
       hadUrl = true;
     }
 
@@ -416,13 +418,6 @@ class ImportContentComponent extends Component {
     );
     e.target.value = null;
     if (!files.length) return;
-
-    const hasPendingBaseAvatar = this.state.imports.some(
-      importRecord => importRecord.type === "avatars" && importRecord.isBase && !importRecord.isImported
-    );
-    const { needsBaseAvatar, needsDefaultAvatar } = this.getImportDefaults();
-
-    let setBaseOnThisAvatar = needsBaseAvatar && !hasPendingBaseAvatar;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -449,7 +444,8 @@ class ImportContentComponent extends Component {
         asset.files.thumbnail = localThumbnailPreviewUrl;
       }
 
-      this.addImport(importId, null, "avatars", asset, needsDefaultAvatar, setBaseOnThisAvatar, true, {
+      // Default all flags to off: admins can explicitly choose base/default/featured before importing.
+      this.addImport(importId, null, "avatars", asset, false, false, false, {
         isLocal: true,
         localFile: file,
         previewUnavailable: !localThumbnailPreviewUrl,
@@ -458,8 +454,6 @@ class ImportContentComponent extends Component {
         localThumbnailFile,
         localThumbnailPreviewUrl
       });
-
-      setBaseOnThisAvatar = false;
     }
   }
 
@@ -761,8 +755,11 @@ class ImportContentComponent extends Component {
       return d;
     });
 
-    if (isNew) {
+    // Mark as reviewed so it doesn't linger in pending lists.
+    try {
       await exec(() => reviewed(objectRecord.id));
+    } catch (e) {
+      console.warn(`Failed to mark imported ${importRecord.type} record as reviewed.`, e);
     }
 
     return isNew;

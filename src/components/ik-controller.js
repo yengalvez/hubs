@@ -112,6 +112,11 @@ AFRAME.registerComponent("ik-controller", {
     this.rootToChest = new Matrix4();
     this.invRootToChest = new Matrix4();
 
+    // Cached positions for robust full-body (Mixamo/RPM) skeletons.
+    this._tmpPosA = new Vector3();
+    this._tmpPosB = new Vector3();
+    this._useSimpleHandIK = true;
+
     this.ikRoot = findIKRoot(this.el);
 
     this.isInView = true;
@@ -160,13 +165,61 @@ AFRAME.registerComponent("ik-controller", {
       this.chest = this.el.object3D.getObjectByName(this.data.chest);
     }
 
-    // Set middleEye's position to be right in the middle of the left and right eyes.
-    this.middleEyePosition.addVectors(this.leftEye.position, this.rightEye.position);
-    this.middleEyePosition.divideScalar(2);
-    this.middleEyeMatrix.makeTranslation(this.middleEyePosition.x, this.middleEyePosition.y, this.middleEyePosition.z);
-    this.invMiddleEyeToHead = this.middleEyeMatrix.copy(this.middleEyeMatrix).invert();
+    // Prefer a higher spine bone as "chest" when present.
+    // Hubs' built-in avatar skeleton has hands directly under Spine, but Mixamo/RPM skeletons
+    // often have Spine1/Spine2. Using Spine2 avoids incorrect transforms when we do need chest space.
+    const spine2 = this.el.object3D.getObjectByName("Spine2");
+    const spine1 = this.el.object3D.getObjectByName("Spine1");
+    if (spine2) {
+      this.chest = spine2;
+    } else if (spine1 && this.chest && this.chest.name === "Spine") {
+      this.chest = spine1;
+    }
 
-    this.invHipsToHeadVector.addVectors(this.chest.position, this.neck.position).add(this.head.position).negate();
+    // Detect a full arm chain (Mixamo/RPM). Hubs' simplified skeleton does not have these bones.
+    // The simple hand IK in this component assumes the hand is a direct child of the chest, which
+    // would badly distort Mixamo rigs. For now we disable hand IK in that case (arms stay in bind pose).
+    const hasArmChain =
+      !!this.el.object3D.getObjectByName("LeftArm") ||
+      !!this.el.object3D.getObjectByName("LeftForeArm") ||
+      !!this.el.object3D.getObjectByName("RightArm") ||
+      !!this.el.object3D.getObjectByName("RightForeArm");
+    this._useSimpleHandIK = !hasArmChain;
+
+    // Set middleEye's position to be right in the middle of the left and right eyes.
+    // Some full-body skeletons don't include eye bones; in that case fall back to using the head origin.
+    if (!this.leftEye || !this.rightEye) {
+      this.middleEyePosition.set(0, 0, 0);
+      this.middleEyeMatrix.identity();
+      this.invMiddleEyeToHead.identity();
+    } else {
+      this.middleEyePosition.addVectors(this.leftEye.position, this.rightEye.position);
+      this.middleEyePosition.divideScalar(2);
+      this.middleEyeMatrix.makeTranslation(
+        this.middleEyePosition.x,
+        this.middleEyePosition.y,
+        this.middleEyePosition.z
+      );
+      this.invMiddleEyeToHead = this.middleEyeMatrix.copy(this.middleEyeMatrix).invert();
+    }
+
+    // Compute the vector from head to avatar root in *IK root local space*.
+    // This is more robust than assuming a fixed Hubs-style hierarchy (Spine->Neck->Head),
+    // and fixes floating/glued-to-camera issues on Mixamo/RPM skeletons.
+    if (this.ikRoot && this.head) {
+      const rootObj = this.ikRoot.el && this.ikRoot.el.object3D;
+      if (rootObj) {
+        this.avatar.getWorldPosition(this._tmpPosA);
+        this.head.getWorldPosition(this._tmpPosB);
+        rootObj.worldToLocal(this._tmpPosA);
+        rootObj.worldToLocal(this._tmpPosB);
+        this.invHipsToHeadVector.copy(this._tmpPosA).sub(this._tmpPosB);
+      } else {
+        this.invHipsToHeadVector.addVectors(this.chest.position, this.neck.position).add(this.head.position).negate();
+      }
+    } else {
+      this.invHipsToHeadVector.addVectors(this.chest.position, this.neck.position).add(this.head.position).negate();
+    }
   },
 
   tick(time, dt) {
@@ -272,8 +325,10 @@ AFRAME.registerComponent("ik-controller", {
 
     const { leftHand, rightHand } = this;
 
-    if (leftHand) this.updateHand(HAND_ROTATIONS.left, leftHand, leftController.object3D, true, this.isInView);
-    if (rightHand) this.updateHand(HAND_ROTATIONS.right, rightHand, rightController.object3D, false, this.isInView);
+    if (this._useSimpleHandIK) {
+      if (leftHand) this.updateHand(HAND_ROTATIONS.left, leftHand, leftController.object3D, true, this.isInView);
+      if (rightHand) this.updateHand(HAND_ROTATIONS.right, rightHand, rightController.object3D, false, this.isInView);
+    }
     this.forceIkUpdate = false;
 
     if (!this._hadFirstTick) {

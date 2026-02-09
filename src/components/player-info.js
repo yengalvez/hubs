@@ -22,6 +22,7 @@ function ensureAvatarNodes(json) {
     const lower = out.toLowerCase();
     if (lower.startsWith("mixamorig") && out.length > "mixamorig".length) {
       out = out.slice("mixamorig".length);
+      out = out.replace(/^[_-]+/, "");
     }
 
     return out;
@@ -55,7 +56,20 @@ function ensureAvatarNodes(json) {
     ];
 
     const desiredByLower = new Map(desiredNames.map(n => [n.toLowerCase(), n]));
-    const existingLower = new Set(nodes.map(n => n.name && n.name.toLowerCase()).filter(Boolean));
+    const existingLower = new Map();
+    for (let i = 0; i < nodes.length; i++) {
+      const name = nodes[i].name;
+      if (!name) continue;
+      existingLower.set(name.toLowerCase(), i);
+    }
+
+    // Prefer renaming joints (bones) when there are multiple candidates with the same suffix name.
+    const jointIndices = new Set();
+    for (const skin of json.skins || []) {
+      for (const joint of skin.joints || []) {
+        jointIndices.add(joint);
+      }
+    }
     const candidatesByLower = new Map();
 
     for (let i = 0; i < nodes.length; i++) {
@@ -70,12 +84,33 @@ function ensureAvatarNodes(json) {
     }
 
     for (const [desiredLower, desiredName] of desiredByLower.entries()) {
-      if (existingLower.has(desiredLower)) continue;
-      const candidates = candidatesByLower.get(desiredLower);
-      if (!candidates || candidates.length !== 1) continue;
+      const existingIndex = existingLower.get(desiredLower);
+      const candidates = candidatesByLower.get(desiredLower) || [];
 
-      nodes[candidates[0]].name = desiredName;
-      existingLower.add(desiredLower);
+      // If we already have the desired name on a joint, keep it.
+      if (existingIndex !== undefined && jointIndices.has(existingIndex)) {
+        continue;
+      }
+
+      const jointCandidates = candidates.filter(i => jointIndices.has(i));
+      const chosen = (jointCandidates.length ? jointCandidates : candidates)[0];
+      if (chosen === undefined) continue;
+
+      // If the desired name is currently taken by a non-joint node and we have a joint candidate,
+      // move the non-joint aside so templates/IK bind to the bone.
+      if (
+        existingIndex !== undefined &&
+        existingIndex !== chosen &&
+        !jointIndices.has(existingIndex) &&
+        jointIndices.has(chosen)
+      ) {
+        const existingName = nodes[existingIndex].name || desiredName;
+        nodes[existingIndex].name = `${existingName}_nonjoint`;
+        existingLower.delete(desiredLower);
+      }
+
+      nodes[chosen].name = desiredName;
+      existingLower.set(desiredLower, chosen);
     }
   };
 
@@ -89,7 +124,8 @@ function ensureAvatarNodes(json) {
     // Note: We assume that the first node in the primary scene is the one we care about.
     const originalRoot = json.scenes[json.scene].nodes[0];
 
-    const requiredNodes = ["Hips", "Spine", "Neck", "Head", "LeftHand", "RightHand"];
+    // Keep this minimal; some valid skeletons won't match all Hubs-required bone names (for example full Mixamo arm chains).
+    const requiredNodes = ["Hips", "Spine", "Neck", "Head"];
     const hasRequiredNodes = requiredNodes.every(n => nodes.some(node => node.name === n));
 
     if (!hasRequiredNodes) {

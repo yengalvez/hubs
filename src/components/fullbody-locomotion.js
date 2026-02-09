@@ -4,16 +4,22 @@
  * Hubs' default IK setup drives hips/head/hands but does not provide a walk cycle.
  * This component adds a light-weight leg swing based on avatar root velocity.
  *
+ * If shared Mixamo locomotion clips are available, we prefer those over the
+ * procedural swing for better-looking results across RPM/Mixamo avatars.
+ *
  * Safe-by-default:
  * - If leg bones are not found, it becomes a no-op.
  * - Only touches lower-body bones.
  */
+
+import { getSharedMixamoLocomotionClips } from "../utils/mixamo-shared-animations";
 
 const { Vector3, MathUtils } = THREE;
 
 AFRAME.registerComponent("fullbody-locomotion", {
   schema: {
     enabled: { type: "boolean", default: true },
+    useSharedAnimations: { type: "boolean", default: true },
     speedThreshold: { type: "number", default: 0.15 }, // m/s
     runThreshold: { type: "number", default: 2.2 }, // m/s
     walkSwing: { type: "number", default: Math.PI / 8 }, // ~22.5deg
@@ -34,6 +40,15 @@ AFRAME.registerComponent("fullbody-locomotion", {
       leftLeg: null,
       rightUpLeg: null,
       rightLeg: null
+    };
+
+    this._destroyed = false;
+    this._shared = {
+      loading: null,
+      ready: false,
+      mixer: null,
+      actions: null,
+      current: null
     };
   },
 
@@ -59,10 +74,63 @@ AFRAME.registerComponent("fullbody-locomotion", {
         console.log("[fullbody-locomotion] Full-body leg bones detected on", this.el);
       }
 
+      if (this.data.useSharedAnimations && !this._shared.loading) {
+        this._shared.loading = this.setupSharedAnimations();
+      }
+
       return true;
     }
 
     return false;
+  },
+
+  async setupSharedAnimations() {
+    try {
+      const { idle, walk } = await getSharedMixamoLocomotionClips();
+      if (this._destroyed) return;
+
+      const root = this.el.object3D;
+      if (!root) return;
+
+      const mixer = new THREE.AnimationMixer(root);
+      const actions = {
+        idle: mixer.clipAction(idle),
+        walk: mixer.clipAction(walk)
+      };
+
+      for (const name of Object.keys(actions)) {
+        const action = actions[name];
+        action.enabled = true;
+        action.setLoop(THREE.LoopRepeat, Infinity);
+        action.clampWhenFinished = false;
+      }
+
+      this._shared.mixer = mixer;
+      this._shared.actions = actions;
+      this._shared.ready = true;
+
+      this.playSharedAction("idle", 0);
+    } catch (e) {
+      if (this.data.debug) {
+        console.warn("[fullbody-locomotion] Shared Mixamo animations unavailable, using procedural swing.", e);
+      }
+    }
+  },
+
+  playSharedAction(name, fadeSeconds) {
+    if (!this._shared.ready || !this._shared.actions) return;
+
+    const next = this._shared.actions[name];
+    if (!next) return;
+
+    const prevName = this._shared.current;
+    const prev = prevName ? this._shared.actions[prevName] : null;
+    if (prev && prev !== next) {
+      prev.fadeOut(fadeSeconds);
+    }
+
+    next.reset().fadeIn(fadeSeconds).play();
+    this._shared.current = name;
   },
 
   tick(time, dt) {
@@ -91,6 +159,25 @@ AFRAME.registerComponent("fullbody-locomotion", {
     this._prevPos.copy(this._tmpPos);
 
     const moving = speed > this.data.speedThreshold;
+
+    if (this.data.useSharedAnimations && this._shared.ready && this._shared.mixer && this._shared.actions) {
+      this._shared.mixer.update(dtSeconds);
+
+      const target = moving ? "walk" : "idle";
+      if (target !== this._shared.current) {
+        this.playSharedAction(target, 0.12);
+      }
+
+      // Scale the walk cycle speed loosely with movement speed to reduce moonwalking.
+      if (target === "walk" && this._shared.actions.walk) {
+        this._shared.actions.walk.timeScale = MathUtils.clamp(speed / 1.4, 0.6, 2.2);
+      } else if (this._shared.actions.idle) {
+        this._shared.actions.idle.timeScale = 1.0;
+      }
+
+      return;
+    }
+
     const running = speed > this.data.runThreshold;
     const maxSwing = running ? this.data.runSwing : this.data.walkSwing;
 
@@ -113,5 +200,19 @@ AFRAME.registerComponent("fullbody-locomotion", {
     const rightKneeTarget = moving ? Math.max(0, -targetRight) * 1.2 : 0;
     leftLeg.rotation.x = MathUtils.lerp(leftLeg.rotation.x, leftKneeTarget, a);
     rightLeg.rotation.x = MathUtils.lerp(rightLeg.rotation.x, rightKneeTarget, a);
+  },
+
+  remove() {
+    this._destroyed = true;
+
+    if (this._shared.mixer) {
+      this._shared.mixer.stopAllAction();
+      this._shared.mixer.uncacheRoot(this.el.object3D);
+    }
+
+    this._shared.mixer = null;
+    this._shared.actions = null;
+    this._shared.ready = false;
+    this._shared.current = null;
   }
 });

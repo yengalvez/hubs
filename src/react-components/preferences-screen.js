@@ -23,6 +23,7 @@ import {
 } from "../utils/screen-orientation-utils";
 import { AAModes } from "../constants";
 import { isLockedDownDemoRoom } from "../utils/hub-utils";
+import { CAMERA_MODE_FIRST_PERSON, CAMERA_MODE_THIRD_PERSON_VIEW } from "../systems/camera-system";
 
 import dropdownArrowUrl from "../assets/images/dropdown_arrow.png";
 import dropdownArrow2xUrl from "../assets/images/dropdown_arrow@2x.png";
@@ -432,6 +433,10 @@ const preferenceLabels = defineMessages({
   disableTeleporter: {
     id: "preferences-screen.preference.disable-teleporter",
     defaultMessage: "Disable teleporter"
+  },
+  enableThirdPersonView: {
+    id: "preferences-screen.preference.enable-third-person-view",
+    defaultMessage: "Enable Third-Person View"
   },
   movementSpeedModifier: {
     id: "preferences-screen.preference.movement-speed-modifier",
@@ -862,17 +867,18 @@ class PreferencesScreen extends Component {
     scene: PropTypes.object
   };
 
-  constructor() {
+  constructor(props) {
     // TODO: When this component is recreated it clears its state.
     // This happens several times as the page is loading.
     // We should either avoid remounting or persist the category somewhere besides state.
-    super();
+    super(props);
 
     this.storeUpdated = this.storeUpdated.bind(this);
     this.permissionsUpdated = this.permissionsUpdated.bind(this);
     const canVoiceChat = APP.hubChannel.can("voice_chat");
 
     this.mediaDevicesManager = APP.mediaDevicesManager;
+    this.previousEnableThirdPersonView = this.props.store.state.preferences.enableThirdPersonView;
 
     this.state = {
       category: CATEGORY_AUDIO,
@@ -994,10 +1000,18 @@ class PreferencesScreen extends Component {
   }
 
   storeUpdated() {
-    const { preferredMic } = this.props.store.state.preferences;
+    const { preferredMic, enableThirdPersonView } = this.props.store.state.preferences;
     if (preferredMic !== this.mediaDevicesManager.selectedMicDeviceId) {
       this.state.canVoiceChat &&
         this.mediaDevicesManager.startMicShare({ updatePrefs: false }).then(this.updateMediaDevices);
+    }
+
+    if (enableThirdPersonView !== this.previousEnableThirdPersonView) {
+      this.previousEnableThirdPersonView = enableThirdPersonView;
+      const cameraSystem = this.props.scene?.systems?.["hubs-systems"]?.cameraSystem;
+      if (cameraSystem?.setMode) {
+        cameraSystem.setMode(enableThirdPersonView ? CAMERA_MODE_THIRD_PERSON_VIEW : CAMERA_MODE_FIRST_PERSON);
+      }
     }
   }
 
@@ -1082,6 +1096,11 @@ class PreferencesScreen extends Component {
           {
             key: "disableTeleporter",
             prefType: PREFERENCE_LIST_ITEM_TYPE.CHECK_BOX
+          },
+          {
+            key: "enableThirdPersonView",
+            prefType: PREFERENCE_LIST_ITEM_TYPE.CHECK_BOX,
+            defaultBool: false
           },
           {
             key: "movementSpeedModifier",

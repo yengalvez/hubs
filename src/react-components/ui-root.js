@@ -103,6 +103,7 @@ import { usePermissions } from "./room/hooks/usePermissions";
 import { ChatContextProvider } from "./room/contexts/ChatContext";
 import ChatToolbarButton from "./room/components/ChatToolbarButton/ChatToolbarButton";
 import SeePlansCTA from "./room/components/SeePlansCTA/SeePlansCTA";
+import { CAMERA_MODE_FIRST_PERSON, CAMERA_MODE_THIRD_PERSON_VIEW } from "../systems/camera-system";
 
 const avatarEditorDebug = qsTruthy("avatarEditorDebug");
 
@@ -699,6 +700,17 @@ class UIRoot extends Component {
     this.setState({ isStreaming });
   };
 
+  toggleThirdPersonView = () => {
+    if (this.props.scene.is("vr-mode")) return;
+
+    const cameraSystem = this.props.scene?.systems?.["hubs-systems"]?.cameraSystem;
+    if (!cameraSystem?.setMode) return;
+
+    const enableThirdPersonView = !this.props.store.state.preferences.enableThirdPersonView;
+    this.props.store.update({ preferences: { enableThirdPersonView } });
+    cameraSystem.setMode(enableThirdPersonView ? CAMERA_MODE_THIRD_PERSON_VIEW : CAMERA_MODE_FIRST_PERSON);
+  };
+
   renderDialog = (DialogClass, props = {}) => <DialogClass {...{ onClose: this.closeDialog, ...props }} />;
 
   signOut = async () => {
@@ -1049,6 +1061,8 @@ class UIRoot extends Component {
     const enteredOrWatching = entered || watching;
     const showRtcDebugPanel = this.props.store.state.preferences.showRtcDebugPanel;
     const showAudioDebugPanel = this.props.store.state.preferences.showAudioDebugPanel;
+    const thirdPersonEnabled = this.props.store.state.preferences.enableThirdPersonView;
+    const inVrMode = this.props.scene?.is("vr-mode");
     const displayNameOverride = this.props.hubIsBound
       ? getPresenceProfileForSession(this.props.presences, this.props.sessionId).displayName
       : null;
@@ -1642,6 +1656,17 @@ class UIRoot extends Component {
                           <ReactionPopoverContainer
                             scene={this.props.scene}
                             initialPresence={getPresenceProfileForSession(this.props.presences, this.props.sessionId)}
+                          />
+                        )}
+                        {!inVrMode && (
+                          <ToolbarButton
+                            icon={<CameraIcon />}
+                            label={
+                              <FormattedMessage id="toolbar.third-person-view-button" defaultMessage="Third Person" />
+                            }
+                            preset="basic"
+                            selected={thirdPersonEnabled}
+                            onClick={this.toggleThirdPersonView}
                           />
                         )}
                       </>

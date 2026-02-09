@@ -89,7 +89,8 @@ class ImportContentComponent extends Component {
     imports: [],
     addBaseTag: false,
     addDefaultTag: false,
-    reticulumMeta: {}
+    reticulumMeta: {},
+    baseAvatarListingId: null
   };
 
   handleUrlChanged(ev) {
@@ -98,11 +99,25 @@ class ImportContentComponent extends Component {
 
   async componentDidMount() {
     this.updateReticulumMeta();
+    this.updateBaseAvatarListingId();
   }
 
   async updateReticulumMeta() {
     const reticulumMeta = await fetchReticulumAuthenticated(`/api/v1/meta?include_repo`);
     this.setState({ reticulumMeta });
+  }
+
+  async updateBaseAvatarListingId() {
+    try {
+      const { entries } = await fetchReticulumAuthenticated(`/api/v1/media/search?filter=base&source=avatar_listings`);
+      const baseAvatarListingId = entries && entries[0] && entries[0].id;
+      this.setState({ baseAvatarListingId: baseAvatarListingId || null });
+      return baseAvatarListingId || null;
+    } catch (e) {
+      console.warn("Failed to fetch base avatar listings.", e);
+      this.setState({ baseAvatarListingId: null });
+      return null;
+    }
   }
 
   normalizeSubmittedUrl(url) {
@@ -461,6 +476,17 @@ class ImportContentComponent extends Component {
 
   async importLocalAvatar(importRecord) {
     const { localFile } = importRecord;
+
+    let baseAvatarListingId = this.state.baseAvatarListingId;
+    if (!baseAvatarListingId) {
+      baseAvatarListingId = await this.updateBaseAvatarListingId();
+    }
+    if (!baseAvatarListingId) {
+      throw new Error(
+        "No base avatar listing found. Import a base avatar first (Admin > Import Content), then retry local upload."
+      );
+    }
+
     const { gltf, bin } = await this.splitGlbIntoFiles(localFile);
     const thumbnail = await this.createPlaceholderThumbnail(localFile.name);
 
@@ -472,6 +498,7 @@ class ImportContentComponent extends Component {
 
     const avatar = {
       name: this.avatarNameFromFile(localFile.name),
+      parent_avatar_listing_id: baseAvatarListingId,
       files: {
         gltf: [uploadResults[0].file_id, uploadResults[0].meta.access_token, uploadResults[0].meta.promotion_token],
         bin: [uploadResults[1].file_id, uploadResults[1].meta.access_token, uploadResults[1].meta.promotion_token],
@@ -576,6 +603,7 @@ class ImportContentComponent extends Component {
 
         this.setImportResult(url, isNewListing ? RESULTS.new_listing : RESULTS.existing_listing);
         await this.updateReticulumMeta();
+        await this.updateBaseAvatarListingId();
       } catch (error) {
         console.error("onImport:", error);
         this.setImportResult(url, RESULTS.failed);

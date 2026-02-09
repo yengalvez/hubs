@@ -129,11 +129,11 @@
                             position="0 0.4 0"></a-entity>
                     </a-entity>
 
-	                    <a-entity class="model" gltf-model-plus="inflate: true">
-	                        <template data-name="AvatarRoot">
-	                            <a-entity ik-controller fullbody-locomotion hand-pose__left hand-pose__right networked-audio-analyser>
-	                            </a-entity>
-	                        </template>
+                    <a-entity class="model" gltf-model-plus="inflate: true">
+                        <template data-name="AvatarRoot">
+                            <a-entity ik-controller fullbody-locomotion hand-pose__left hand-pose__right networked-audio-analyser>
+                            </a-entity>
+                        </template>
 
                         <template data-name="Spine">
                             <a-entity is-remote-hover-target personal-space-invader="radius: 0.2; useMaterial: true;"
@@ -812,13 +812,13 @@
                 shape-helper="type: box; fit: manual; halfExtents: 0.03 0.04 0.05; offset: 0 0 -0.04" set-yxz-order>
             </a-entity>
 
-	            <a-entity gltf-model-plus="inflate: true;" class="model">
-	                <template data-name="AvatarRoot">
-	                    <a-entity ik-controller="alwaysUpdate: true" fullbody-locomotion disable-frustum-culling hand-pose__left
-	                        hand-pose__right
-	                        hand-pose-controller__left="networkedAvatar:#avatar-rig;eventSrc:#player-left-controller"
-	                        hand-pose-controller__right="networkedAvatar:#avatar-rig;eventSrc:#player-right-controller"></a-entity>
-	                </template>
+            <a-entity gltf-model-plus="inflate: true;" class="model">
+                <template data-name="AvatarRoot">
+                    <a-entity ik-controller="alwaysUpdate: true" fullbody-locomotion disable-frustum-culling hand-pose__left
+                        hand-pose__right
+                        hand-pose-controller__left="networkedAvatar:#avatar-rig;eventSrc:#player-left-controller"
+                        hand-pose-controller__right="networkedAvatar:#avatar-rig;eventSrc:#player-right-controller"></a-entity>
+                </template>
 
                 <template data-name="Spine">
                     <a-entity>

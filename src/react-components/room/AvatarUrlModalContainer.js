@@ -5,10 +5,23 @@ import { idForAvatarUrl } from "../../utils/media-url-utils";
 import { fetchReticulumAuthenticated } from "../../utils/phoenix-utils";
 
 const hasProtocol = value => /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
+const isAvatarSid = value => /^[a-zA-Z0-9]{7}$/.test(value);
 
 const normalizeAvatarInput = rawUrl => {
   const trimmedUrl = (rawUrl || "").trim();
   if (!trimmedUrl) return trimmedUrl;
+
+  if (isAvatarSid(trimmedUrl)) {
+    return trimmedUrl;
+  }
+
+  if (trimmedUrl.startsWith("/")) {
+    try {
+      return new URL(trimmedUrl, document.location.origin).href;
+    } catch {
+      return trimmedUrl;
+    }
+  }
 
   const normalizedInput = hasProtocol(trimmedUrl) ? trimmedUrl : `https://${trimmedUrl}`;
 
@@ -20,9 +33,31 @@ const normalizeAvatarInput = rawUrl => {
   }
 };
 
+const avatarSidFromPathname = pathname => {
+  const pathParts = (pathname || "").split("/").filter(Boolean);
+
+  // Page URL: /avatars/<sid>
+  if (pathParts[0] === "avatars" && isAvatarSid(pathParts[1])) return pathParts[1];
+
+  // API URLs:
+  // - /api/v1/avatars/<sid>
+  // - /api/v1/avatars/<sid>/avatar.gltf
+  // - /api/v1/avatars/<sid>/base.gltf
+  if (pathParts[0] === "api" && pathParts[1] === "v1" && pathParts[2] === "avatars" && isAvatarSid(pathParts[3])) {
+    return pathParts[3];
+  }
+
+  return null;
+};
+
 const resolveAvatarIdForInput = async urlOrText => {
   const normalizedInput = normalizeAvatarInput(urlOrText);
   if (!normalizedInput) return normalizedInput;
+
+  // Allow pasting an avatar SID directly.
+  if (isAvatarSid(normalizedInput)) {
+    return normalizedInput;
+  }
 
   let parsedUrl;
   try {
@@ -32,7 +67,7 @@ const resolveAvatarIdForInput = async urlOrText => {
     return normalizedInput;
   }
 
-  const hubsAvatarId = idForAvatarUrl(parsedUrl.href);
+  const hubsAvatarId = idForAvatarUrl(parsedUrl.href) || avatarSidFromPathname(parsedUrl.pathname);
   if (!hubsAvatarId) return parsedUrl.href;
 
   // If the avatar URL is from this server, store the avatar SID directly (skinnable avatar).

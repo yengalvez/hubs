@@ -30,7 +30,7 @@ import Paper from "@material-ui/core/Paper";
 import { Title, GET_MANY_REFERENCE, GET_ONE } from "react-admin";
 import TextField from "@material-ui/core/TextField";
 import Button from "@material-ui/core/Button";
-import { fetchReticulumAuthenticated, getReticulumFetchUrl } from "hubs/src/utils/phoenix-utils";
+import { fetchReticulumAuthenticated, getDirectReticulumFetchUrl } from "hubs/src/utils/phoenix-utils";
 import { proxiedUrlFor } from "hubs/src/utils/media-url-utils";
 import { ensureAvatarMaterial } from "hubs/src/utils/avatar-utils";
 import { getAvatarSkeletonMetadata } from "hubs/src/utils/avatar-skeleton-utils";
@@ -90,7 +90,8 @@ class ImportContentComponent extends Component {
     addBaseTag: false,
     addDefaultTag: false,
     reticulumMeta: {},
-    baseAvatarListingId: null
+    baseAvatarListingId: null,
+    baseAvatarBaseGltfUrl: null
   };
 
   handleUrlChanged(ev) {
@@ -110,12 +111,24 @@ class ImportContentComponent extends Component {
   async updateBaseAvatarListingId() {
     try {
       const { entries } = await fetchReticulumAuthenticated(`/api/v1/media/search?filter=base&source=avatar_listings`);
-      const baseAvatarListingId = entries && entries[0] && entries[0].id;
-      this.setState({ baseAvatarListingId: baseAvatarListingId || null });
+      const baseEntry = entries && entries[0];
+      const baseAvatarListingId = baseEntry && baseEntry.id;
+      const baseAvatarBaseGltfUrl = baseEntry && baseEntry.gltfs && baseEntry.gltfs.base;
+
+      await new Promise(resolve =>
+        this.setState(
+          {
+            baseAvatarListingId: baseAvatarListingId || null,
+            baseAvatarBaseGltfUrl: baseAvatarBaseGltfUrl || null
+          },
+          resolve
+        )
+      );
+
       return baseAvatarListingId || null;
     } catch (e) {
       console.warn("Failed to fetch base avatar listings.", e);
-      this.setState({ baseAvatarListingId: null });
+      await new Promise(resolve => this.setState({ baseAvatarListingId: null, baseAvatarBaseGltfUrl: null }, resolve));
       return null;
     }
   }
@@ -433,7 +446,8 @@ class ImportContentComponent extends Component {
     const token = window.APP?.store?.state?.credentials?.token;
     const headers = token ? { authorization: `bearer ${token}` } : undefined;
 
-    const response = await fetch(getReticulumFetchUrl("/api/v1/media"), {
+    // Upload directly to a reticulum host to avoid proxy timeouts / ingress body size limits.
+    const response = await fetch(getDirectReticulumFetchUrl("/api/v1/media"), {
       method: "POST",
       headers,
       body: formData
@@ -478,12 +492,19 @@ class ImportContentComponent extends Component {
     const { localFile } = importRecord;
 
     let baseAvatarListingId = this.state.baseAvatarListingId;
+    let baseAvatarBaseGltfUrl = this.state.baseAvatarBaseGltfUrl;
     if (!baseAvatarListingId) {
       baseAvatarListingId = await this.updateBaseAvatarListingId();
+      baseAvatarBaseGltfUrl = this.state.baseAvatarBaseGltfUrl;
     }
     if (!baseAvatarListingId) {
       throw new Error(
         "No base avatar listing found. Import a base avatar first (Admin > Import Content), then retry local upload."
+      );
+    }
+    if (!baseAvatarBaseGltfUrl) {
+      throw new Error(
+        "Base avatar listing is missing base glTF. Re-import a known-good base avatar (Admin > Import Content), then retry."
       );
     }
 
@@ -498,6 +519,7 @@ class ImportContentComponent extends Component {
 
     const avatar = {
       name: this.avatarNameFromFile(localFile.name),
+      base_gltf_url: baseAvatarBaseGltfUrl,
       parent_avatar_listing_id: baseAvatarListingId,
       files: {
         gltf: [uploadResults[0].file_id, uploadResults[0].meta.access_token, uploadResults[0].meta.promotion_token],

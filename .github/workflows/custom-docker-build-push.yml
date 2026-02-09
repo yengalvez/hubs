@@ -31,10 +31,11 @@ on:
 # Add in default values for the inputs plus define any missing variables we need.
 # Everything should take their values from env rather than inputs.
 env:
-  Registry_Base_URL: ${{ inputs.Override_Registry_Base_URL || vars.REGISTRY_BASE_URL }}
+  # Default to GHCR so this workflow works out-of-the-box even if repo vars are unset.
+  Registry_Base_URL: ${{ inputs.Override_Registry_Base_URL || vars.REGISTRY_BASE_URL || 'ghcr.io' }}
 # Registry_Username: This must be added in each job that needs it.
 # Registry_Password: This must be added in each job that needs it.
-  Registry_Namespace: ${{ inputs.Override_Registry_Namespace || vars.REGISTRY_NAMESPACE }}
+  Registry_Namespace: ${{ inputs.Override_Registry_Namespace || vars.REGISTRY_NAMESPACE || github.repository_owner }}
   Image_Tag: ${{ inputs.Override_Image_Tag || github.ref_name }}
   Dockerfile: ${{ inputs.Override_Dockerfile || 'RetPageOriginDockerfile' }}
   Code_Path: ${{ inputs.Override_Code_Path }}
@@ -50,7 +51,11 @@ jobs:
       - name: Assign username from secret
         if: ${{ inputs.Override_Registry_Username == ''}}
         run: |
-          echo "Registry_Username=${{ secrets.REGISTRY_USERNAME }}" >> "$GITHUB_ENV"
+          USERNAME="${{ secrets.REGISTRY_USERNAME }}"
+          if [ -z "$USERNAME" ]; then
+            USERNAME="${{ github.actor }}"
+          fi
+          echo "Registry_Username=$USERNAME" >> "$GITHUB_ENV"
 
       - name: Assign username from input
         if: ${{ inputs.Override_Registry_Username != ''}}
@@ -62,7 +67,13 @@ jobs:
       - name: Assign password from secret
         if: ${{ inputs.Override_Registry_Password == ''}}
         run: |
-          echo "Registry_Password=${{ secrets.REGISTRY_PASSWORD }}" >> "$GITHUB_ENV"
+          PASSWORD="${{ secrets.REGISTRY_PASSWORD }}"
+          # If no registry password secret is configured, default to the workflow token.
+          # This works for GHCR when the workflow has `packages: write`.
+          if [ -z "$PASSWORD" ]; then
+            PASSWORD="${{ secrets.GITHUB_TOKEN }}"
+          fi
+          echo "Registry_Password=$PASSWORD" >> "$GITHUB_ENV"
 
       - name: Assign password from input
         if: ${{ inputs.Override_Registry_Password != ''}}

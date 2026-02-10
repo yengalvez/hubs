@@ -20,8 +20,15 @@ on:
 jobs:
   turkeyGitops:
     # This workflow is intended for Hubs Foundation infra (turkey). In forks, required secrets are
-    # usually not configured and the run will fail noisily on every push. Skip unless secrets exist.
-    if: ${{ secrets.DOCKER_HUB_PWD != '' && secrets.GCP_TURKEYGITOPS_SA_JSON != '' && secrets.BLDR_HAB_TOKEN != '' && secrets.BLDR_RET_TOKEN != '' && secrets.BLDR_RET_PUB_B64 != '' && secrets.BLDR_HAB_PVT_B64 != '' }}
+    # usually not configured and the run will fail noisily on every push.
+    #
+    # NOTE: This job calls a reusable workflow (`uses:`). GitHub Actions does not allow referencing
+    # the `secrets.*` context in the job-level `if:` expression for reusable workflow calls, which
+    # causes a workflow parse-time error like:
+    #   "Unrecognized named-value: 'secrets'"
+    #
+    # To keep forks working, gate this job to the upstream org (or explicitly enable it via a repo var).
+    if: ${{ github.repository_owner == 'Hubs-Foundation' || vars.ENABLE_TURKEY_GITOPS == 'true' }}
     uses: Hubs-Foundation/hubs-ops/.github/workflows/turkeyGitops.yml@master
     with:
       registry: hubsfoundation

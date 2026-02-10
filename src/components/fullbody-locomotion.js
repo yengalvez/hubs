@@ -106,6 +106,40 @@ AFRAME.registerComponent("fullbody-locomotion", {
       const root = this.el.object3D;
       if (!root) return;
 
+      // Mixamo exports "Hips.position" in centimeters-like units (e.g. ~103 at standing height).
+      // Applying that translation verbatim to arbitrary RPM/Mixamo avatars can shove the skeleton far away,
+      // making the avatar appear to disappear when sitting.
+      //
+      // We retarget the sit clip's hips translation per-avatar by:
+      // - anchoring the first keyframe to the avatar's current hips local position
+      // - scaling the Y delta by (avatarHipsY / mixamoHipsY0) to convert units + match avatar scale
+      const retargetedSit = (() => {
+        const clip = sit.clone();
+
+        const hips = root.getObjectByName("Hips");
+        if (!hips) return clip;
+
+        const hipsPosTrack = clip.tracks.find(t => t && t.name === "Hips.position");
+        if (!hipsPosTrack || !hipsPosTrack.values || hipsPosTrack.values.length < 3) return clip;
+
+        const values = hipsPosTrack.values;
+        const mixamoY0 = values[1];
+        const avatarHipsX = hips.position.x;
+        const avatarHipsY = hips.position.y;
+        const avatarHipsZ = hips.position.z;
+
+        const scale = Math.abs(mixamoY0) > 1e-4 ? avatarHipsY / mixamoY0 : 0;
+
+        for (let i = 0; i < values.length; i += 3) {
+          const y = values[i + 1];
+          values[i] = avatarHipsX;
+          values[i + 1] = avatarHipsY + (y - mixamoY0) * scale;
+          values[i + 2] = avatarHipsZ;
+        }
+
+        return clip;
+      })();
+
       const mixer = new THREE.AnimationMixer(root);
       const actions = {
         idle: mixer.clipAction(idle),
@@ -113,7 +147,7 @@ AFRAME.registerComponent("fullbody-locomotion", {
         walkBack: mixer.clipAction(walkBack),
         strafeLeft: mixer.clipAction(strafeLeft),
         strafeRight: mixer.clipAction(strafeRight),
-        sit: mixer.clipAction(sit)
+        sit: mixer.clipAction(retargetedSit)
       };
 
       // Default looping actions.

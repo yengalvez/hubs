@@ -31,6 +31,8 @@ AFRAME.registerComponent("fullbody-locomotion", {
   init() {
     this._tmpPos = new Vector3();
     this._prevPos = new Vector3();
+    this._tmpVel = new Vector3();
+    this._tmpQuat = new THREE.Quaternion();
     this._hadFirstTick = false;
     this._phase = 0;
     this._isFullBody = false;
@@ -98,7 +100,7 @@ AFRAME.registerComponent("fullbody-locomotion", {
 
   async setupSharedAnimations() {
     try {
-      const { idle, walk, sit } = await getSharedMixamoLocomotionClips();
+      const { idle, walk, walkBack, strafeLeft, strafeRight, sit } = await getSharedMixamoLocomotionClips();
       if (this._destroyed) return;
 
       const root = this.el.object3D;
@@ -108,11 +110,14 @@ AFRAME.registerComponent("fullbody-locomotion", {
       const actions = {
         idle: mixer.clipAction(idle),
         walk: mixer.clipAction(walk),
+        walkBack: mixer.clipAction(walkBack),
+        strafeLeft: mixer.clipAction(strafeLeft),
+        strafeRight: mixer.clipAction(strafeRight),
         sit: mixer.clipAction(sit)
       };
 
       // Default looping actions.
-      for (const name of ["idle", "walk"]) {
+      for (const name of ["idle", "walk", "walkBack", "strafeLeft", "strafeRight"]) {
         const action = actions[name];
         action.enabled = true;
         action.setLoop(THREE.LoopRepeat, Infinity);
@@ -191,14 +196,44 @@ AFRAME.registerComponent("fullbody-locomotion", {
         return;
       }
 
-      const target = moving ? "walk" : "idle";
+      let target = "idle";
+      if (moving) {
+        // Decide between forward/back/strafe based on horizontal velocity in avatar-local space.
+        //
+        // Convention: in three.js, an object's "forward" is typically -Z in local space.
+        this._tmpVel.set(dx / dtSeconds, 0, dz / dtSeconds);
+
+        const dirRoot = (this._playerInfoEl && this._playerInfoEl.object3D) || root;
+        dirRoot.getWorldQuaternion(this._tmpQuat);
+        this._tmpQuat.invert();
+        this._tmpVel.applyQuaternion(this._tmpQuat);
+        this._tmpVel.y = 0;
+
+        const angle = Math.atan2(this._tmpVel.x, -this._tmpVel.z); // [-pi..pi], 0 = forward
+        const abs = Math.abs(angle);
+
+        if (abs <= Math.PI / 4) {
+          target = "walk";
+        } else if (abs >= (3 * Math.PI) / 4) {
+          target = "walkBack";
+        } else if (angle > 0) {
+          target = "strafeRight";
+        } else {
+          target = "strafeLeft";
+        }
+      }
+
+      if (!this._shared.actions[target]) {
+        target = moving ? "walk" : "idle";
+      }
+
       if (target !== this._shared.current) {
         this.playSharedAction(target, 0.12);
       }
 
       // Scale the walk cycle speed loosely with movement speed to reduce moonwalking.
-      if (target === "walk" && this._shared.actions.walk) {
-        this._shared.actions.walk.timeScale = MathUtils.clamp(speed / 1.4, 0.6, 2.2);
+      if (moving && target !== "idle" && this._shared.actions[target]) {
+        this._shared.actions[target].timeScale = MathUtils.clamp(speed / 1.4, 0.6, 2.2);
       } else if (this._shared.actions.idle) {
         this._shared.actions.idle.timeScale = 1.0;
       }

@@ -50,6 +50,7 @@ export class CharacterControllerSystem {
     this.scene = scene;
     this.fly = false;
     this.shouldLandWhenPossible = false;
+    this._lastIsSitting = null;
     this.waypoints = [];
     this.waypointTravelStartTime = 0;
     this.waypointTravelTime = 0;
@@ -66,6 +67,19 @@ export class CharacterControllerSystem {
       this.avatarPOV = document.getElementById("avatar-pov-node");
       this.avatarRig = document.getElementById("avatar-rig");
     });
+  }
+
+  setSittingState(isSitting) {
+    const next = !!isSitting;
+    if (this._lastIsSitting === next) return;
+    this._lastIsSitting = next;
+
+    if (this.avatarRig) {
+      this.avatarRig.setAttribute("player-info", { isSitting: next });
+    }
+
+    // Used by the React UI to update Sit/Stand button state.
+    this.scene.emit("sitting-state-changed", { isSitting: next });
   }
   // Use this API for waypoint travel so that your matrix doesn't end up in the pool
   enqueueWaypointTravelTo(inTransform, isInstant, waypointComponentData) {
@@ -88,6 +102,7 @@ export class CharacterControllerSystem {
     return function teleportTo(targetWorldPosition) {
       this.didTeleportSinceLastWaypointTravel = true;
       this.isMotionDisabled = false;
+      this.setSittingState(false);
       this.avatarRig.object3D.getWorldPosition(rig);
       this.avatarPOV.object3D.getWorldPosition(head);
       targetForHead.copy(targetWorldPosition);
@@ -183,6 +198,13 @@ export class CharacterControllerSystem {
           this.activeWaypoint.waypointComponentData.willDisableMotion &&
           (!isMobile || this.activeWaypoint.waypointComponentData.willDisableTeleporting);
         this.isTeleportingDisabled = this.activeWaypoint.waypointComponentData.willDisableTeleporting;
+
+        // If we're traveling to a non-sitting waypoint, clear sitting immediately so the
+        // avatar stands up while moving away.
+        if (!this.activeWaypoint.waypointComponentData.willDisableMotion) {
+          this.setSittingState(false);
+        }
+
         this.avatarPOV.object3D.updateMatrices();
         this.waypointTravelTime =
           (vrMode && !qsAllowWaypointLerp) || this.activeWaypoint.isInstant
@@ -222,6 +244,10 @@ export class CharacterControllerSystem {
           this.activeWaypoint.waypointComponentData.snapToNavMesh,
           this.activeWaypoint.waypointComponentData.willMaintainInitialOrientation
         );
+
+        // Sitting state is determined by the waypoint authoring flag (Spoke: "Disable motion").
+        this.setSittingState(this.activeWaypoint.waypointComponentData.willDisableMotion);
+
         freePooledMatrix4(this.activeWaypoint.transform);
         this.activeWaypoint = null;
         if (vrMode || this.waypointTravelTime > 0) {

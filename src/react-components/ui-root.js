@@ -104,6 +104,14 @@ import { ChatContextProvider } from "./room/contexts/ChatContext";
 import ChatToolbarButton from "./room/components/ChatToolbarButton/ChatToolbarButton";
 import SeePlansCTA from "./room/components/SeePlansCTA/SeePlansCTA";
 import { CAMERA_MODE_FIRST_PERSON, CAMERA_MODE_THIRD_PERSON_VIEW } from "../systems/camera-system";
+import { defineQuery } from "bitecs";
+import { SceneRoot, Waypoint } from "../bit-components";
+import {
+  WaypointFlags,
+  releaseOccupiedWaypoint,
+  moveToSpawnPoint as moveToSpawnPointBitEcs
+} from "../bit-systems/waypoint";
+import { findAncestorWithComponent, shouldUseNewLoader } from "../utils/bit-utils";
 
 const avatarEditorDebug = qsTruthy("avatarEditorDebug");
 
@@ -113,6 +121,8 @@ const IN_ROOM_MODAL_QUERY_VARS = ["media_source"];
 const LOBBY_MODAL_ROUTER_PATHS = ["/media/scenes", "/media/avatars", "/media/favorites"];
 const LOBBY_MODAL_QUERY_VARS = ["media_source"];
 const LOBBY_MODAL_QUERY_VALUES = ["scenes", "avatars", "favorites"];
+
+const bitWaypointQuery = defineQuery([Waypoint]);
 
 async function grantedMicLabels() {
   const mediaDevices = await navigator.mediaDevices.enumerateDevices();
@@ -193,6 +203,7 @@ class UIRoot extends Component {
     watching: false,
     isStreaming: false,
     isRecordingMode: false,
+    isSitting: false,
 
     waitingOnAudio: false,
     audioTrackClone: null,
@@ -325,6 +336,7 @@ class UIRoot extends Component {
     this.props.scene.addEventListener("share_video_enabled", this.onShareVideoEnabled);
     this.props.scene.addEventListener("share_video_disabled", this.onShareVideoDisabled);
     this.props.scene.addEventListener("share_video_failed", this.onShareVideoFailed);
+    this.props.scene.addEventListener("sitting-state-changed", this.onSittingStateChanged);
     this.props.scene.addEventListener("exit", this.exitEventHandler);
     this.props.scene.addEventListener("action_exit_watch", () => {
       if (this.state.hide) {
@@ -401,6 +413,8 @@ class UIRoot extends Component {
     }
 
     this.playerRig = scene.querySelector("#avatar-rig");
+    this._sittingTmpRigPos = new THREE.Vector3();
+    this._sittingTmpWaypointPos = new THREE.Vector3();
 
     scene.addEventListener("action_media_tweet", this.onTweet);
   }
@@ -415,6 +429,7 @@ class UIRoot extends Component {
     this.props.scene.removeEventListener("share_video_enabled", this.onShareVideoEnabled);
     this.props.scene.removeEventListener("share_video_disabled", this.onShareVideoDisabled);
     this.props.scene.removeEventListener("share_video_failed", this.onShareVideoFailed);
+    this.props.scene.removeEventListener("sitting-state-changed", this.onSittingStateChanged);
     this.props.scene.removeEventListener("action_media_tweet", this.onTweet);
     this.props.store.removeEventListener("statechanged", this.storeUpdated);
     window.removeEventListener("concurrentload", this.onConcurrentLoad);
@@ -709,6 +724,202 @@ class UIRoot extends Component {
     const enableThirdPersonView = !this.props.store.state.preferences.enableThirdPersonView;
     this.props.store.update({ preferences: { enableThirdPersonView } });
     cameraSystem.setMode(enableThirdPersonView ? CAMERA_MODE_THIRD_PERSON_VIEW : CAMERA_MODE_FIRST_PERSON);
+  };
+
+  onSittingStateChanged = e => {
+    const isSitting = !!(e && e.detail && e.detail.isSitting);
+    if (isSitting === this.state.isSitting) return;
+    this.setState({ isSitting });
+  };
+
+  toggleSitting = async () => {
+    if (this.props.scene.is("vr-mode")) return;
+
+    if (this.state.isSitting) {
+      await this.standFromSeat();
+    } else {
+      await this.sitAtNearestSeatWaypoint();
+    }
+  };
+
+  sitAtNearestSeatWaypoint = async () => {
+    const scene = this.props.scene;
+    const maxDistSq = 2.0 * 2.0;
+
+    if (!this.playerRig || !this.playerRig.object3D) return;
+    this.playerRig.object3D.getWorldPosition(this._sittingTmpRigPos);
+
+    const characterController = scene?.systems?.["hubs-systems"]?.characterController;
+    if (!characterController) return;
+
+    if (shouldUseNewLoader()) {
+      const world = APP.world;
+      if (!world) return;
+
+      const eids = bitWaypointQuery(world);
+      let best = null;
+
+      for (let i = 0; i < eids.length; i++) {
+        const eid = eids[i];
+        if (!findAncestorWithComponent(world, SceneRoot, eid)) continue;
+
+        const flags = Waypoint.flags[eid];
+        const isSeat = !!(flags & WaypointFlags.willDisableMotion);
+        if (!isSeat) continue;
+
+        const obj = world.eid2obj.get(eid);
+        if (!obj) continue;
+        obj.updateMatrices();
+        obj.getWorldPosition(this._sittingTmpWaypointPos);
+        const distSq = this._sittingTmpRigPos.distanceToSquared(this._sittingTmpWaypointPos);
+        if (distSq > maxDistSq) continue;
+
+        if (!best || distSq < best.distSq) {
+          best = { eid, obj, flags, distSq };
+        }
+      }
+
+      if (!best) return;
+
+      const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
+      characterController.shouldLandWhenPossible = true;
+      characterController.enqueueWaypointTravelTo(best.obj.matrixWorld, isInstant, {
+        willDisableMotion: !!(best.flags & WaypointFlags.willDisableMotion),
+        willDisableTeleporting: !!(best.flags & WaypointFlags.willDisableTeleporting),
+        snapToNavMesh: !!(best.flags & WaypointFlags.snapToNavMesh),
+        willMaintainInitialOrientation: !!(best.flags & WaypointFlags.willMaintainInitialOrientation)
+      });
+
+      return;
+    }
+
+    const waypointSystem = scene?.systems?.["hubs-systems"]?.waypointSystem;
+    if (!waypointSystem || !waypointSystem.ready) return;
+
+    const candidates = [];
+    for (let i = 0; i < waypointSystem.ready.length; i++) {
+      const component = waypointSystem.ready[i];
+      if (!component || !component.el || !component.el.object3D) continue;
+      if (!component.data.willDisableMotion) continue;
+
+      component.el.object3D.updateMatrices();
+      component.el.object3D.getWorldPosition(this._sittingTmpWaypointPos);
+      const distSq = this._sittingTmpRigPos.distanceToSquared(this._sittingTmpWaypointPos);
+      if (distSq > maxDistSq) continue;
+
+      candidates.push({ component, distSq });
+    }
+
+    candidates.sort((a, b) => a.distSq - b.distSq);
+    if (!candidates.length) return;
+
+    // Release any occupied spawnpoints before attempting to occupy a seat.
+    waypointSystem.releaseAnyOccupiedWaypoints();
+
+    for (let i = 0; i < candidates.length; i++) {
+      const { component } = candidates[i];
+
+      if (component.data.canBeOccupied) {
+        const didOccupy = await waypointSystem.tryToOccupy(component);
+        if (!didOccupy) continue;
+
+        component.el.object3D.updateMatrices();
+        characterController.shouldLandWhenPossible = true;
+        const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
+        characterController.enqueueWaypointTravelTo(component.el.object3D.matrixWorld, isInstant, component.data);
+        return;
+      } else {
+        waypointSystem.moveToWaypoint(component, false);
+        return;
+      }
+    }
+  };
+
+  standFromSeat = async () => {
+    const scene = this.props.scene;
+
+    // Immediately clear sitting so locomotion returns to idle/walk before we move away.
+    if (this.playerRig) {
+      this.playerRig.setAttribute("player-info", { isSitting: false });
+    }
+    scene.emit("sitting-state-changed", { isSitting: false });
+
+    const characterController = scene?.systems?.["hubs-systems"]?.characterController;
+    if (!characterController) return;
+
+    if (!this.playerRig || !this.playerRig.object3D) return;
+    this.playerRig.object3D.getWorldPosition(this._sittingTmpRigPos);
+
+    if (shouldUseNewLoader()) {
+      const world = APP.world;
+      if (!world) return;
+
+      releaseOccupiedWaypoint();
+
+      const eids = bitWaypointQuery(world);
+      let best = null;
+
+      for (let i = 0; i < eids.length; i++) {
+        const eid = eids[i];
+        if (!findAncestorWithComponent(world, SceneRoot, eid)) continue;
+
+        const flags = Waypoint.flags[eid];
+        const isSeat = !!(flags & WaypointFlags.willDisableMotion);
+        if (isSeat) continue;
+
+        const obj = world.eid2obj.get(eid);
+        if (!obj) continue;
+        obj.updateMatrices();
+        obj.getWorldPosition(this._sittingTmpWaypointPos);
+        const distSq = this._sittingTmpRigPos.distanceToSquared(this._sittingTmpWaypointPos);
+
+        if (!best || distSq < best.distSq) {
+          best = { eid, obj, flags, distSq };
+        }
+      }
+
+      if (!best) {
+        moveToSpawnPointBitEcs(world, characterController);
+        return;
+      }
+
+      const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
+      characterController.shouldLandWhenPossible = true;
+      characterController.enqueueWaypointTravelTo(best.obj.matrixWorld, isInstant, {
+        willDisableMotion: !!(best.flags & WaypointFlags.willDisableMotion),
+        willDisableTeleporting: !!(best.flags & WaypointFlags.willDisableTeleporting),
+        snapToNavMesh: !!(best.flags & WaypointFlags.snapToNavMesh),
+        willMaintainInitialOrientation: !!(best.flags & WaypointFlags.willMaintainInitialOrientation)
+      });
+
+      return;
+    }
+
+    const waypointSystem = scene?.systems?.["hubs-systems"]?.waypointSystem;
+    if (!waypointSystem || !waypointSystem.ready) return;
+
+    waypointSystem.releaseAnyOccupiedWaypoints();
+
+    let best = null;
+    for (let i = 0; i < waypointSystem.ready.length; i++) {
+      const component = waypointSystem.ready[i];
+      if (!component || !component.el || !component.el.object3D) continue;
+      if (component.data.willDisableMotion) continue;
+
+      component.el.object3D.updateMatrices();
+      component.el.object3D.getWorldPosition(this._sittingTmpWaypointPos);
+      const distSq = this._sittingTmpRigPos.distanceToSquared(this._sittingTmpWaypointPos);
+
+      if (!best || distSq < best.distSq) {
+        best = { component, distSq };
+      }
+    }
+
+    if (best && best.component) {
+      waypointSystem.moveToWaypoint(best.component, false);
+    } else {
+      waypointSystem.moveToSpawnPoint();
+    }
   };
 
   renderDialog = (DialogClass, props = {}) => <DialogClass {...{ onClose: this.closeDialog, ...props }} />;
@@ -1659,15 +1870,30 @@ class UIRoot extends Component {
                           />
                         )}
                         {!inVrMode && (
-                          <ToolbarButton
-                            icon={<CameraIcon />}
-                            label={
-                              <FormattedMessage id="toolbar.third-person-view-button" defaultMessage="Third Person" />
-                            }
-                            preset="basic"
-                            selected={thirdPersonEnabled}
-                            onClick={this.toggleThirdPersonView}
-                          />
+                          <>
+                            <ToolbarButton
+                              icon={<CameraIcon />}
+                              label={
+                                <FormattedMessage id="toolbar.third-person-view-button" defaultMessage="Third Person" />
+                              }
+                              preset="basic"
+                              selected={thirdPersonEnabled}
+                              onClick={this.toggleThirdPersonView}
+                            />
+                            <ToolbarButton
+                              icon={<AvatarIcon />}
+                              label={
+                                this.state.isSitting ? (
+                                  <FormattedMessage id="toolbar.stand-button" defaultMessage="Stand" />
+                                ) : (
+                                  <FormattedMessage id="toolbar.sit-button" defaultMessage="Sit" />
+                                )
+                              }
+                              preset="basic"
+                              selected={this.state.isSitting}
+                              onClick={this.toggleSitting}
+                            />
+                          </>
                         )}
                       </>
                     )}

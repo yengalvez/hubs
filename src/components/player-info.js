@@ -195,7 +195,8 @@ AFRAME.registerComponent("player-info", {
     avatarSrc: { type: "string" },
     avatarType: { type: "string", default: AVATAR_TYPES.SKINNABLE },
     muted: { default: false },
-    isSharingAvatarCamera: { default: false }
+    isSharingAvatarCamera: { default: false },
+    isSitting: { default: false }
   },
   init() {
     this.applyProperties = this.applyProperties.bind(this);

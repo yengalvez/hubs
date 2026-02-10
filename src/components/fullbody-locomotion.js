@@ -34,6 +34,7 @@ AFRAME.registerComponent("fullbody-locomotion", {
     this._hadFirstTick = false;
     this._phase = 0;
     this._isFullBody = false;
+    this._playerInfoEl = null;
 
     this._bones = {
       leftUpLeg: null,
@@ -50,6 +51,17 @@ AFRAME.registerComponent("fullbody-locomotion", {
       actions: null,
       current: null
     };
+  },
+
+  getIsSitting() {
+    if (!this._playerInfoEl) {
+      // fullbody-locomotion is attached under the AvatarRoot template. player-info lives on the avatar entity.
+      this._playerInfoEl = this.el.closest("[player-info]");
+    }
+
+    const playerInfo =
+      this._playerInfoEl && this._playerInfoEl.components && this._playerInfoEl.components["player-info"];
+    return !!(playerInfo && playerInfo.data && playerInfo.data.isSitting);
   },
 
   maybeResolveBones() {
@@ -86,7 +98,7 @@ AFRAME.registerComponent("fullbody-locomotion", {
 
   async setupSharedAnimations() {
     try {
-      const { idle, walk } = await getSharedMixamoLocomotionClips();
+      const { idle, walk, sit } = await getSharedMixamoLocomotionClips();
       if (this._destroyed) return;
 
       const root = this.el.object3D;
@@ -95,15 +107,22 @@ AFRAME.registerComponent("fullbody-locomotion", {
       const mixer = new THREE.AnimationMixer(root);
       const actions = {
         idle: mixer.clipAction(idle),
-        walk: mixer.clipAction(walk)
+        walk: mixer.clipAction(walk),
+        sit: mixer.clipAction(sit)
       };
 
-      for (const name of Object.keys(actions)) {
+      // Default looping actions.
+      for (const name of ["idle", "walk"]) {
         const action = actions[name];
         action.enabled = true;
         action.setLoop(THREE.LoopRepeat, Infinity);
         action.clampWhenFinished = false;
       }
+
+      // One-shot sit action that holds the final pose.
+      actions.sit.enabled = true;
+      actions.sit.setLoop(THREE.LoopOnce, 1);
+      actions.sit.clampWhenFinished = true;
 
       this._shared.mixer = mixer;
       this._shared.actions = actions;
@@ -144,6 +163,8 @@ AFRAME.registerComponent("fullbody-locomotion", {
 
     const dtSeconds = Math.max(0.001, dt / 1000);
 
+    const isSitting = this.getIsSitting();
+
     root.getWorldPosition(this._tmpPos);
 
     if (!this._hadFirstTick) {
@@ -163,6 +184,13 @@ AFRAME.registerComponent("fullbody-locomotion", {
     if (this.data.useSharedAnimations && this._shared.ready && this._shared.mixer && this._shared.actions) {
       this._shared.mixer.update(dtSeconds);
 
+      if (isSitting) {
+        if (this._shared.current !== "sit") {
+          this.playSharedAction("sit", 0.12);
+        }
+        return;
+      }
+
       const target = moving ? "walk" : "idle";
       if (target !== this._shared.current) {
         this.playSharedAction(target, 0.12);
@@ -175,6 +203,17 @@ AFRAME.registerComponent("fullbody-locomotion", {
         this._shared.actions.idle.timeScale = 1.0;
       }
 
+      return;
+    }
+
+    if (isSitting) {
+      // Procedural fallback: stop leg swing while sitting.
+      const { leftUpLeg, leftLeg, rightUpLeg, rightLeg } = this._bones;
+      const a = MathUtils.clamp(this.data.responsiveness, 0.01, 1.0);
+      leftUpLeg.rotation.x = MathUtils.lerp(leftUpLeg.rotation.x, 0, a);
+      rightUpLeg.rotation.x = MathUtils.lerp(rightUpLeg.rotation.x, 0, a);
+      leftLeg.rotation.x = MathUtils.lerp(leftLeg.rotation.x, 0, a);
+      rightLeg.rotation.x = MathUtils.lerp(rightLeg.rotation.x, 0, a);
       return;
     }
 

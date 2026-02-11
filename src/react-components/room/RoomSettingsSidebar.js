@@ -290,7 +290,7 @@ export function RoomSettingsSidebar({
             <NumericInputField
               required={botsEnabled}
               min={0}
-              max={10}
+              max={5}
               disabled={!botsEnabled}
               placeholder={intl.formatMessage({
                 id: "room-settings-sidebar.bots-count-placeholder",
@@ -302,7 +302,7 @@ export function RoomSettingsSidebar({
               {...register("user_data.bots.count", {
                 valueAsNumber: true,
                 min: 0,
-                max: 10
+                max: 5
               })}
             />
             <RadioInputField

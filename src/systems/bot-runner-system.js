@@ -56,11 +56,13 @@ AFRAME.registerSystem("bot-runner-system", {
     this.enabled = !!configs.feature("enable_room_bots") && qsTruthy("bot_runner");
     this.bots = new Map();
     this.avatarRefs = [];
+    this.spawnPoints = [];
     this.patrolPoints = [];
     this.lastConfigRefreshAt = 0;
     this.lastNetworkPublishAt = 0;
     this.lastFeaturedAvatarRefreshAt = 0;
     this._tmpDir = new THREE.Vector3();
+    this._tmpSpawnOffset = new THREE.Vector3();
 
     this.onHubUpdated = this.onHubUpdated.bind(this);
     this.onMessage = this.onMessage.bind(this);
@@ -111,9 +113,12 @@ AFRAME.registerSystem("bot-runner-system", {
   async refreshFeaturedAvatarIds() {
     try {
       const res = await fetchReticulumAuthenticated("/api/v1/media/search?source=avatar_listings&filter=featured");
-      this.avatarRefs = ((res && res.entries) || [])
+      const refs = ((res && res.entries) || [])
         .map(entry => (entry && entry.gltfs && entry.gltfs.avatar) || null)
         .filter(Boolean);
+
+      this.avatarRefs = refs;
+      this.reseedBotAvatars();
     } catch (e) {
       console.warn("Failed to fetch featured avatars for bots", e);
       this.avatarRefs = [];
@@ -172,7 +177,10 @@ AFRAME.registerSystem("bot-runner-system", {
     }
 
     const namedSpawbots = points.filter(point => (point.name || "").toLowerCase().startsWith("spawbot-"));
-    this.patrolPoints = namedSpawbots.length ? namedSpawbots : points;
+    this.spawnPoints = namedSpawbots.length ? namedSpawbots : points;
+    // Use explicit spawbots for patrol only when there are at least 2, otherwise
+    // fall back to all spawn-capable points so bots can actually move.
+    this.patrolPoints = namedSpawbots.length >= 2 ? namedSpawbots : points;
   },
 
   pickAvatarId() {
@@ -184,6 +192,51 @@ AFRAME.registerSystem("bot-runner-system", {
     return fallbackProfileAvatarId || "";
   },
 
+  reseedBotAvatars() {
+    if (!this.avatarRefs.length) return;
+
+    this.bots.forEach(record => {
+      const currentAvatarId = record.el?.components?.["bot-info"]?.data?.avatarId;
+      if (currentAvatarId && this.avatarRefs.includes(currentAvatarId)) return;
+
+      record.el.setAttribute("bot-info", "avatarId", this.pickAvatarId());
+    });
+  },
+
+  pickSpawnPoint(botId) {
+    const points = this.spawnPoints.length ? this.spawnPoints : this.patrolPoints;
+    if (!points.length) return null;
+
+    const index = Math.max(Number(String(botId).replace("bot-", "")) - 1, 0);
+    return points[index % points.length];
+  },
+
+  positionForSpawnPoint(point, botId) {
+    const pos = point.position.clone();
+    if ((this.spawnPoints.length ? this.spawnPoints : this.patrolPoints).length > 1) return pos;
+
+    // If only one spawn point exists, spread bots slightly to avoid perfect overlap.
+    const index = Math.max(Number(String(botId).replace("bot-", "")) - 1, 0);
+    if (index === 0) return pos;
+
+    const angle = index * ((Math.PI * 2) / 6);
+    const radius = 0.8;
+    this._tmpSpawnOffset.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+    pos.add(this._tmpSpawnOffset);
+    return pos;
+  },
+
+  randomNearbyDestination(record) {
+    const origin = record.homePosition || record.position;
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 0.8 + Math.random() * 1.2;
+    return new THREE.Vector3(
+      origin.x + Math.cos(angle) * radius,
+      record.position.y,
+      origin.z + Math.sin(angle) * radius
+    );
+  },
+
   pickPatrolPoint(excludeName) {
     if (!this.patrolPoints.length) return null;
 
@@ -193,8 +246,8 @@ AFRAME.registerSystem("bot-runner-system", {
   },
 
   createBot(botId, config) {
-    const startPoint = this.pickPatrolPoint();
-    const startPos = startPoint ? startPoint.position.clone() : new THREE.Vector3();
+    const startPoint = this.pickSpawnPoint(botId);
+    const startPos = startPoint ? this.positionForSpawnPoint(startPoint, botId) : new THREE.Vector3();
     const avatarId = this.pickAvatarId();
 
     const el = document.createElement("a-entity");
@@ -215,6 +268,7 @@ AFRAME.registerSystem("bot-runner-system", {
       el,
       state: "idle",
       position: startPos,
+      homePosition: startPos.clone(),
       yawDeg: Number(el.getAttribute("rotation")?.y || 0),
       destination: null,
       stateEndsAt: performance.now() + idleDuration,
@@ -291,9 +345,15 @@ AFRAME.registerSystem("bot-runner-system", {
     }
 
     if (!target) {
-      record.state = "idle";
-      record.stateEndsAt = performance.now() + this.randomIdleDurationMs(record.mobility);
-      return;
+      target = {
+        name: "__wander__",
+        position: this.randomNearbyDestination(record)
+      };
+    } else if (target.position.distanceTo(record.position) <= 0.08) {
+      target = {
+        name: "__wander__",
+        position: this.randomNearbyDestination(record)
+      };
     }
 
     record.state = "walk";

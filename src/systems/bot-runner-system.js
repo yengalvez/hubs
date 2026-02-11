@@ -237,10 +237,14 @@ AFRAME.registerSystem("bot-runner-system", {
     );
   },
 
-  pickPatrolPoint(excludeName) {
+  pickPatrolPoint(excludeName, fromPosition) {
     if (!this.patrolPoints.length) return null;
 
-    const candidates = this.patrolPoints.filter(point => point.name !== excludeName);
+    const candidates = this.patrolPoints.filter(point => {
+      if (point.name === excludeName) return false;
+      if (!fromPosition) return true;
+      return point.position.distanceToSquared(fromPosition) > 0.04;
+    });
     const source = candidates.length ? candidates : this.patrolPoints;
     return source[Math.floor(Math.random() * source.length)];
   },
@@ -341,7 +345,7 @@ AFRAME.registerSystem("bot-runner-system", {
     }
 
     if (!target) {
-      target = this.pickPatrolPoint(record.destination?.name);
+      target = this.pickPatrolPoint(record.destination?.name, record.position);
     }
 
     if (!target) {

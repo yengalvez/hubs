@@ -54,6 +54,7 @@ import { ChatSidebarContainer } from "./room/ChatSidebarContainer";
 import { ContentMenu, PeopleMenuButton, ObjectsMenuButton, ECSDebugMenuButton } from "./room/ContentMenu";
 import { ReactComponent as CameraIcon } from "./icons/Camera.svg";
 import { ReactComponent as AvatarIcon } from "./icons/Avatar.svg";
+import { ReactComponent as ChatIcon } from "./icons/Chat.svg";
 import { ReactComponent as AddIcon } from "./icons/Add.svg";
 import { ReactComponent as DeleteIcon } from "./icons/Delete.svg";
 import { ReactComponent as FavoritesIcon } from "./icons/Favorites.svg";
@@ -86,6 +87,7 @@ import { SignInStep } from "./auth/SignInModal";
 import { LeaveReason, LeaveRoomModal } from "./room/LeaveRoomModal";
 import { RoomSidebar } from "./room/RoomSidebar";
 import { RoomSettingsSidebarContainer } from "./room/RoomSettingsSidebarContainer";
+import { BotChatPanelContainer } from "./room/BotChatPanelContainer";
 import { AutoExitWarningModal, AutoExitReason } from "./room/AutoExitWarningModal";
 import { ExitReason } from "./room/ExitedRoomScreen";
 import { UserProfileSidebarContainer } from "./room/UserProfileSidebarContainer";
@@ -222,7 +224,9 @@ class UIRoot extends Component {
     sidebarId: null,
     presenceCount: 0,
     chatPrefix: "",
-    chatAutofocus: false
+    chatAutofocus: false,
+    nearestBot: null,
+    selectedBotForChat: null
   };
 
   constructor(props) {
@@ -415,6 +419,9 @@ class UIRoot extends Component {
     this.playerRig = scene.querySelector("#avatar-rig");
     this._sittingTmpRigPos = new THREE.Vector3();
     this._sittingTmpWaypointPos = new THREE.Vector3();
+    this._botTmpRigPos = new THREE.Vector3();
+    this._botTmpBotPos = new THREE.Vector3();
+    this._botProximityInterval = window.setInterval(this.refreshNearestBot, 1000);
 
     scene.addEventListener("action_media_tweet", this.onTweet);
   }
@@ -436,6 +443,10 @@ class UIRoot extends Component {
     window.removeEventListener("idle_detected", this.onIdleDetected);
     window.removeEventListener("activity_detected", this.onActivityDetected);
     window.removeEventListener("focus_chat", this.onFocusChat);
+    if (this._botProximityInterval) {
+      clearInterval(this._botProximityInterval);
+      this._botProximityInterval = null;
+    }
   }
 
   storeUpdated = () => {
@@ -922,6 +933,79 @@ class UIRoot extends Component {
     }
   };
 
+  getRoomBotsConfig = () => {
+    const bots = this.props.hub?.user_data?.bots || {};
+
+    const enabled = !!(bots.enabled || bots["enabled"]);
+    const chatEnabled = !!(bots.chat_enabled || bots["chat_enabled"]);
+    const count = Number(bots.count || bots["count"] || 0) || 0;
+
+    return {
+      enabled,
+      chatEnabled,
+      count
+    };
+  };
+
+  isBotChatEnabled = () => {
+    const roomBotsFeatureEnabled = !!configs.feature("enable_room_bots");
+    const botChatFeatureEnabled = !!configs.feature("enable_bot_chat");
+    const botsConfig = this.getRoomBotsConfig();
+
+    return roomBotsFeatureEnabled && botChatFeatureEnabled && botsConfig.enabled && botsConfig.chatEnabled;
+  };
+
+  refreshNearestBot = () => {
+    if (!this.playerRig?.object3D) return;
+    if (!this.props.scene?.is("entered") || !this.isBotChatEnabled()) {
+      if (this.state.nearestBot) {
+        this.setState({ nearestBot: null });
+      }
+      return;
+    }
+
+    this.playerRig.object3D.getWorldPosition(this._botTmpRigPos);
+    const botEls = this.props.scene.querySelectorAll("[bot-info]");
+
+    let nearest = null;
+    for (let i = 0; i < botEls.length; i++) {
+      const botEl = botEls[i];
+      if (!botEl.object3D) continue;
+
+      botEl.object3D.getWorldPosition(this._botTmpBotPos);
+      const distSq = this._botTmpRigPos.distanceToSquared(this._botTmpBotPos);
+
+      if (!nearest || distSq < nearest.distSq) {
+        const botInfo = botEl.components?.["bot-info"]?.data || {};
+        nearest = {
+          botId: botInfo.botId || `bot-${i + 1}`,
+          botName: botInfo.displayName || "Bot",
+          distSq
+        };
+      }
+    }
+
+    // Require proximity for showing Talk.
+    if (nearest && nearest.distSq > 9) {
+      nearest = null;
+    }
+
+    const prevBotId = this.state.nearestBot?.botId;
+    const nextBotId = nearest?.botId;
+    if (prevBotId !== nextBotId) {
+      this.setState({ nearestBot: nearest });
+    }
+  };
+
+  openBotChat = () => {
+    const nearestBot = this.state.nearestBot;
+    if (!nearestBot) return;
+
+    this.setSidebar("bot-chat", {
+      selectedBotForChat: nearestBot
+    });
+  };
+
   renderDialog = (DialogClass, props = {}) => <DialogClass {...{ onClose: this.closeDialog, ...props }} />;
 
   signOut = async () => {
@@ -998,7 +1082,14 @@ class UIRoot extends Component {
   pushHistoryState = (k, v) => pushHistoryState(this.props.history, k, v);
 
   setSidebar(sidebarId, otherState) {
-    this.setState({ sidebarId, chatPrefix: "", chatAutofocus: false, selectedUserId: null, ...(otherState || {}) });
+    this.setState({
+      sidebarId,
+      chatPrefix: "",
+      chatAutofocus: false,
+      selectedUserId: null,
+      selectedBotForChat: null,
+      ...(otherState || {})
+    });
   }
 
   toggleSidebar(sidebarId, otherState) {
@@ -1008,6 +1099,7 @@ class UIRoot extends Component {
       return {
         sidebarId: nextSidebarId,
         selectedUserId: null,
+        selectedBotForChat: null,
         ...otherState
       };
     });
@@ -1273,6 +1365,9 @@ class UIRoot extends Component {
     const showRtcDebugPanel = this.props.store.state.preferences.showRtcDebugPanel;
     const showAudioDebugPanel = this.props.store.state.preferences.showAudioDebugPanel;
     const thirdPersonEnabled = this.props.store.state.preferences.enableThirdPersonView;
+    const botChatEnabled = this.isBotChatEnabled();
+    const nearestBot = this.state.nearestBot;
+    const canTalkToBot = !!(botChatEnabled && nearestBot);
     const inVrMode = this.props.scene?.is("vr-mode");
     const displayNameOverride = this.props.hubIsBound
       ? getPresenceProfileForSession(this.props.presences, this.props.sessionId).displayName
@@ -1809,6 +1904,16 @@ class UIRoot extends Component {
                           onChangeScene={this.onChangeScene}
                         />
                       )}
+                      {this.state.sidebarId === "bot-chat" && this.state.selectedBotForChat && (
+                        <BotChatPanelContainer
+                          scene={this.props.scene}
+                          hubChannel={this.props.hubChannel}
+                          hubSid={this.props.hub?.hub_id}
+                          botId={this.state.selectedBotForChat.botId}
+                          botName={this.state.selectedBotForChat.botName}
+                          onClose={() => this.setSidebar(null)}
+                        />
+                      )}
                       {this.state.sidebarId === "ecs-debug" && (
                         <ECSDebugSidebarContainer onClose={() => this.setSidebar(null)} />
                       )}
@@ -1893,6 +1998,16 @@ class UIRoot extends Component {
                               selected={this.state.isSitting}
                               onClick={this.toggleSitting}
                             />
+                            {botChatEnabled && (
+                              <ToolbarButton
+                                icon={<ChatIcon />}
+                                label={<FormattedMessage id="toolbar.bot-talk-button" defaultMessage="Talk" />}
+                                preset="basic"
+                                selected={this.state.sidebarId === "bot-chat"}
+                                disabled={!canTalkToBot}
+                                onClick={this.openBotChat}
+                              />
+                            )}
                           </>
                         )}
                       </>

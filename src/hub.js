@@ -77,6 +77,7 @@ import "./components/hover-visuals";
 import "./components/offset-relative-to";
 import "./components/player-info";
 import "./components/fullbody-locomotion";
+import "./components/bot-info";
 import "./components/name-tag";
 import "./components/debug";
 import "./components/hand-poses";
@@ -181,6 +182,7 @@ import "./systems/listed-media";
 import "./systems/linked-media";
 import "./systems/audio-debug-system";
 import "./systems/audio-gain-system";
+import "./systems/bot-runner-system";
 import "./gltf-component-mappings";
 
 import { App, getScene } from "./app";
@@ -1376,7 +1378,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       sent: session_id === socket.params().session_id
     };
 
-    if (scene.is("vr-mode")) {
+    if (scene.is("vr-mode") && type !== "bot_command") {
       createInWorldLogMessage(incomingMessage);
     }
 

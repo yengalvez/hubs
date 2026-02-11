@@ -1,0 +1,75 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 420px;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message {
+  border: 1px solid var(--border4-color);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--overlay3-color);
+}
+
+.user {
+  background: var(--primary3-color);
+}
+
+.bot {
+  background: var(--overlay4-color);
+}
+
+.system {
+  background: var(--warning2-color);
+}
+
+.messageAuthor {
+  font-size: 11px;
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+.messageBody {
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.emptyState {
+  color: var(--text3-color);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px 8px;
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input {
+  width: 100%;
+  min-height: 76px;
+  border: 1px solid var(--border4-color);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--field-background-color);
+  color: var(--text1-color);
+  resize: vertical;
+}
+
+.input:focus {
+  outline: 2px solid var(--action-color);
+  outline-offset: 1px;
+}

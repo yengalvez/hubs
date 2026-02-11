@@ -166,6 +166,7 @@ function ensureAvatarNodes(json) {
           nodes.push({
             name: "LeftEye",
             translation: [-eyeOffsetX, eyeOffsetY, eyeOffsetZ],
+            extras: { hubsInjectedEye: true },
             extensions: { MOZ_hubs_components: {} }
           });
           eyeChildIndices.push(nodes.length - 1);
@@ -175,6 +176,7 @@ function ensureAvatarNodes(json) {
           nodes.push({
             name: "RightEye",
             translation: [eyeOffsetX, eyeOffsetY, eyeOffsetZ],
+            extras: { hubsInjectedEye: true },
             extensions: { MOZ_hubs_components: {} }
           });
           eyeChildIndices.push(nodes.length - 1);

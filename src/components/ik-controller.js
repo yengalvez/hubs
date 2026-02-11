@@ -116,6 +116,11 @@ AFRAME.registerComponent("ik-controller", {
     this._tmpPosA = new Vector3();
     this._tmpPosB = new Vector3();
     this._useSimpleHandIK = true;
+    this._playerInfoEl = null;
+    this._lastIsSitting = false;
+    this._hasSittingPositionLock = false;
+    this._sittingLockedPosition = new Vector3();
+    this._hasInjectedEyes = false;
 
     this.ikRoot = findIKRoot(this.el);
 
@@ -186,9 +191,14 @@ AFRAME.registerComponent("ik-controller", {
       !!this.el.object3D.getObjectByName("RightForeArm");
     this._useSimpleHandIK = !hasArmChain;
 
+    const hasInjectedLeftEye = !!(this.leftEye && this.leftEye.userData && this.leftEye.userData.hubsInjectedEye);
+    const hasInjectedRightEye = !!(this.rightEye && this.rightEye.userData && this.rightEye.userData.hubsInjectedEye);
+    this._hasInjectedEyes = hasInjectedLeftEye || hasInjectedRightEye;
+
     // Set middleEye's position to be right in the middle of the left and right eyes.
     // Some full-body skeletons don't include eye bones; in that case fall back to using the head origin.
-    if (!this.leftEye || !this.rightEye) {
+    // If eye nodes were injected by us, their offsets are synthetic and should not influence body alignment.
+    if (!this.leftEye || !this.rightEye || this._hasInjectedEyes) {
       this.middleEyePosition.set(0, 0, 0);
       this.middleEyeMatrix.identity();
       this.invMiddleEyeToHead.identity();
@@ -227,9 +237,26 @@ AFRAME.registerComponent("ik-controller", {
       return;
     }
 
+    this.avatar = this.avatar || this.el.object3D;
+    if (!this.avatar) return;
+
     const root = this.ikRoot.el.object3D;
     root.updateMatrices();
     const { camera, leftController, rightController } = this.ikRoot;
+
+    this._playerInfoEl = this._playerInfoEl || this.el.closest("[player-info]");
+    const playerInfo =
+      this._playerInfoEl && this._playerInfoEl.components && this._playerInfoEl.components["player-info"];
+    const isSitting = !!(playerInfo && playerInfo.data && playerInfo.data.isSitting);
+    if (isSitting !== this._lastIsSitting) {
+      if (isSitting) {
+        this._sittingLockedPosition.copy(this.avatar.position);
+        this._hasSittingPositionLock = true;
+      } else {
+        this._hasSittingPositionLock = false;
+      }
+      this._lastIsSitting = isSitting;
+    }
 
     camera.object3D.updateMatrix();
 
@@ -278,7 +305,15 @@ AFRAME.registerComponent("ik-controller", {
       // hips will use vertex skinning to do the root displacement, which results in
       // frustum culling errors since three.js does not take into account skinning when
       // computing frustum culling sphere bounds.
-      avatar.position.setFromMatrixPosition(headTransform).add(invHipsToHeadVector);
+      if (!isSitting || !this._hasSittingPositionLock) {
+        avatar.position.setFromMatrixPosition(headTransform).add(invHipsToHeadVector);
+        if (isSitting) {
+          this._sittingLockedPosition.copy(avatar.position);
+          this._hasSittingPositionLock = true;
+        }
+      } else {
+        avatar.position.copy(this._sittingLockedPosition);
+      }
       avatar.matrixNeedsUpdate = true;
 
       // Animate the hip rotation to follow the Y rotation of the camera with some damping.

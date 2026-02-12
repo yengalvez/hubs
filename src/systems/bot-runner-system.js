@@ -62,6 +62,7 @@ AFRAME.registerSystem("bot-runner-system", {
     this.lastConfigRefreshAt = 0;
     this.lastNetworkPublishAt = 0;
     this.lastFeaturedAvatarRefreshAt = 0;
+    this._wasConnected = false;
     this._tmpDir = new THREE.Vector3();
     this._tmpSpawnOffset = new THREE.Vector3();
 
@@ -426,6 +427,27 @@ AFRAME.registerSystem("bot-runner-system", {
   tick(t, dt) {
     if (!this.enabled) return;
     if (!this.el.sceneEl.is("entered")) return;
+
+    const connection = window.NAF && window.NAF.connection;
+    const isConnected =
+      !!connection && typeof connection.isConnected === "function" ? !!connection.isConnected() : false;
+
+    // If the runner creates networked entities before the NAF connection is fully established,
+    // those spawns may never replicate to other clients. Gate bot spawning on `isConnected`,
+    // and respawn when reconnecting.
+    if (!isConnected) {
+      if (this._wasConnected) {
+        this._wasConnected = false;
+        this.clearBots();
+      }
+      return;
+    }
+
+    if (!this._wasConnected) {
+      this._wasConnected = true;
+      this.clearBots();
+      this.lastConfigRefreshAt = 0;
+    }
 
     if (t - this.lastConfigRefreshAt > CONFIG_REFRESH_INTERVAL_MS) {
       this.lastConfigRefreshAt = t;

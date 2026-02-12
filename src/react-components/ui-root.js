@@ -226,7 +226,8 @@ class UIRoot extends Component {
     chatPrefix: "",
     chatAutofocus: false,
     nearestBot: null,
-    selectedBotForChat: null
+    selectedBotForChat: null,
+    botChatSessions: {}
   };
 
   constructor(props) {
@@ -301,6 +302,18 @@ class UIRoot extends Component {
 
     if (this.state.presenceCount != this.occupantCount()) {
       this.setState({ presenceCount: this.occupantCount() });
+    }
+
+    const prevHubSid = prevProps.hub?.hub_id;
+    const nextHubSid = this.props.hub?.hub_id;
+    if (prevHubSid !== nextHubSid && Object.keys(this.state.botChatSessions).length) {
+      // Session-only bot chat history: keep it while in the room, but drop it once we leave/switch rooms.
+      this.setState({
+        botChatSessions: {},
+        selectedBotForChat: null,
+        nearestBot: null,
+        sidebarId: this.state.sidebarId === "bot-chat" ? null : this.state.sidebarId
+      });
     }
   }
 
@@ -1001,8 +1014,117 @@ class UIRoot extends Component {
     const nearestBot = this.state.nearestBot;
     if (!nearestBot) return;
 
+    const hubSid = this.props.hub?.hub_id;
+    const botId = nearestBot.botId;
+    const key = hubSid && botId ? `${hubSid}:${botId}` : null;
+
+    let botChatSessions = this.state.botChatSessions;
+    if (key) {
+      const existing = botChatSessions[key];
+      if (!existing) {
+        botChatSessions = {
+          ...botChatSessions,
+          [key]: { botId, botName: nearestBot.botName || botId, messages: [], draft: "" }
+        };
+      } else if (nearestBot.botName && existing.botName !== nearestBot.botName) {
+        botChatSessions = {
+          ...botChatSessions,
+          [key]: { ...existing, botName: nearestBot.botName }
+        };
+      }
+    }
+
     this.setSidebar("bot-chat", {
-      selectedBotForChat: nearestBot
+      selectedBotForChat: nearestBot,
+      botChatSessions
+    });
+  };
+
+  getBotChatSessionKey = botId => {
+    const hubSid = this.props.hub?.hub_id;
+    if (!hubSid || !botId) return null;
+    return `${hubSid}:${botId}`;
+  };
+
+  getBotChatConversations = () => {
+    const hubSid = this.props.hub?.hub_id;
+    if (!hubSid) return [];
+
+    const prefix = `${hubSid}:`;
+    const out = [];
+    for (const [key, session] of Object.entries(this.state.botChatSessions || {})) {
+      if (!key.startsWith(prefix) || !session) continue;
+
+      const messages = session.messages || [];
+      const last = messages.length ? messages[messages.length - 1] : null;
+      const lastTs = last && typeof last.ts === "number" ? last.ts : 0;
+
+      out.push({
+        botId: session.botId,
+        botName: session.botName || session.botId,
+        lastTs
+      });
+    }
+
+    out.sort((a, b) => {
+      if (b.lastTs !== a.lastTs) return b.lastTs - a.lastTs;
+      return String(a.botId || "").localeCompare(String(b.botId || ""));
+    });
+
+    return out;
+  };
+
+  selectBotChatConversation = botId => {
+    const key = this.getBotChatSessionKey(botId);
+    const session = key && this.state.botChatSessions[key];
+    if (!session) return;
+
+    const selectedBotForChat = { botId: session.botId, botName: session.botName || session.botId };
+
+    if (this.state.sidebarId === "bot-chat") {
+      this.setState({ selectedBotForChat });
+    } else {
+      this.setSidebar("bot-chat", { selectedBotForChat });
+    }
+  };
+
+  appendBotChatMessage = (botId, botName, message) => {
+    const key = this.getBotChatSessionKey(botId);
+    if (!key) return;
+
+    this.setState(prevState => {
+      const existing = prevState.botChatSessions[key] || { botId, botName: botName || botId, messages: [], draft: "" };
+      const updated = {
+        ...existing,
+        botName: botName || existing.botName || botId,
+        messages: [...(existing.messages || []), message]
+      };
+      return {
+        botChatSessions: {
+          ...prevState.botChatSessions,
+          [key]: updated
+        }
+      };
+    });
+  };
+
+  setBotChatDraft = (botId, botName, draft) => {
+    const key = this.getBotChatSessionKey(botId);
+    if (!key) return;
+
+    this.setState(prevState => {
+      const existing = prevState.botChatSessions[key] || { botId, botName: botName || botId, messages: [], draft: "" };
+      const updated = {
+        ...existing,
+        botName: botName || existing.botName || botId,
+        draft
+      };
+      return {
+        botChatSessions: {
+          ...prevState.botChatSessions,
+          [key]: updated
+        }
+      };
     });
   };
 
@@ -1033,7 +1155,17 @@ class UIRoot extends Component {
   };
 
   occupantCount = () => {
-    return this.props.presences ? Object.entries(this.props.presences).length : 0;
+    const presences = this.props.presences;
+    if (!presences) return 0;
+
+    let count = 0;
+    for (const presence of Object.values(presences)) {
+      const meta = presence && presence.metas && presence.metas[presence.metas.length - 1];
+      if (meta && meta.context && meta.context.bot_runner) continue;
+      count += 1;
+    }
+
+    return count;
   };
 
   hasEmbedPresence = () => {
@@ -1368,6 +1500,12 @@ class UIRoot extends Component {
     const botChatEnabled = this.isBotChatEnabled();
     const nearestBot = this.state.nearestBot;
     const canTalkToBot = !!(botChatEnabled && nearestBot);
+    const botChatConversations = botChatEnabled ? this.getBotChatConversations() : [];
+    const activeBotChatId = this.state.selectedBotForChat?.botId || null;
+    const activeBotChatKey = activeBotChatId ? this.getBotChatSessionKey(activeBotChatId) : null;
+    const activeBotChatSession = activeBotChatKey ? this.state.botChatSessions[activeBotChatKey] : null;
+    const activeBotChatMessages = (activeBotChatSession && activeBotChatSession.messages) || [];
+    const activeBotChatDraft = (activeBotChatSession && activeBotChatSession.draft) || "";
     const inVrMode = this.props.scene?.is("vr-mode");
     const displayNameOverride = this.props.hubIsBound
       ? getPresenceProfileForSession(this.props.presences, this.props.sessionId).displayName
@@ -1911,6 +2049,26 @@ class UIRoot extends Component {
                           hubSid={this.props.hub?.hub_id}
                           botId={this.state.selectedBotForChat.botId}
                           botName={this.state.selectedBotForChat.botName}
+                          messages={activeBotChatMessages}
+                          inputValue={activeBotChatDraft}
+                          sendingDisabled={!botChatEnabled}
+                          conversations={botChatConversations}
+                          activeBotId={activeBotChatId}
+                          onSelectConversation={this.selectBotChatConversation}
+                          onInputChange={value =>
+                            this.setBotChatDraft(
+                              this.state.selectedBotForChat.botId,
+                              this.state.selectedBotForChat.botName,
+                              value
+                            )
+                          }
+                          onAppendMessage={message =>
+                            this.appendBotChatMessage(
+                              this.state.selectedBotForChat.botId,
+                              this.state.selectedBotForChat.botName,
+                              message
+                            )
+                          }
                           onClose={() => this.setSidebar(null)}
                         />
                       )}

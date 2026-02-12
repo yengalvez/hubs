@@ -11,6 +11,8 @@ const NETWORK_PUBLISH_INTERVAL_MS = 100;
 const CONFIG_REFRESH_INTERVAL_MS = 3000;
 const FEATURED_AVATARS_REFRESH_INTERVAL_MS = 60000;
 const BOT_COMMAND_TYPE = "bot_command";
+const WAYPOINT_RAYCAST_HEIGHT_M = 0.2;
+const WAYPOINT_RAYCAST_ENDPOINT_EPSILON_M = 0.1;
 
 const bitWaypointQuery = defineQuery([Waypoint]);
 
@@ -35,36 +37,46 @@ function normalizeBotsConfig(config) {
 
 const MOBILITY_BEHAVIOR = {
   low: {
-    speedMps: 0.9,
-    idleMinMs: 5000,
-    idleMaxMs: 12000
+    speedMps: 0.7,
+    idleMinMs: 6000,
+    idleMaxMs: 16000
   },
   medium: {
-    speedMps: 1.4,
+    speedMps: 1.0,
     idleMinMs: 3000,
-    idleMaxMs: 8000
+    idleMaxMs: 10000
   },
   high: {
-    speedMps: 2.0,
-    idleMinMs: 1000,
-    idleMaxMs: 3500
+    speedMps: 1.3,
+    idleMinMs: 1500,
+    idleMaxMs: 6000
   }
 };
 
 AFRAME.registerSystem("bot-runner-system", {
   init() {
     this.enabled = !!configs.feature("enable_room_bots") && qsTruthy("bot_runner");
+    this.debug = this.enabled && qsTruthy("bot_debug");
     this.bots = new Map();
     this.avatarRefs = [];
+    this.fullbodyAvatarRefs = [];
     this.avatarRotationOffset = Math.floor(Math.random() * 1000);
     this.spawnPoints = [];
     this.patrolPoints = [];
+    this.allWaypoints = [];
+    this.spawnFlagPoints = [];
+    this.namedSpawbots = [];
     this.lastConfigRefreshAt = 0;
     this.lastNetworkPublishAt = 0;
     this.lastFeaturedAvatarRefreshAt = 0;
     this._wasConnected = false;
     this._tmpDir = new THREE.Vector3();
     this._tmpSpawnOffset = new THREE.Vector3();
+    this._raycaster = new THREE.Raycaster();
+    this._raycastRoots = null;
+    this._tmpRayOrigin = new THREE.Vector3();
+    this._tmpRayTarget = new THREE.Vector3();
+    this._tmpRayDir = new THREE.Vector3();
 
     this.onHubUpdated = this.onHubUpdated.bind(this);
     this.onMessage = this.onMessage.bind(this);
@@ -115,21 +127,37 @@ AFRAME.registerSystem("bot-runner-system", {
   async refreshFeaturedAvatarIds() {
     try {
       const res = await fetchReticulumAuthenticated("/api/v1/media/search?source=avatar_listings&filter=featured");
-      const refs = ((res && res.entries) || [])
-        .map(entry => (entry && entry.gltfs && entry.gltfs.avatar) || null)
-        .filter(Boolean);
+      const allRefs = [];
+      const fullbodyRefs = [];
 
-      this.avatarRefs = Array.from(new Set(refs));
+      for (const entry of (res && res.entries) || []) {
+        const ref = (entry && entry.gltfs && entry.gltfs.avatar) || null;
+        if (!ref) continue;
+
+        allRefs.push(ref);
+
+        const tags = ((entry && entry.tags && entry.tags.tags) || []).map(t => String(t).toLowerCase());
+        const isFullbody = tags.includes("fullbody") || tags.includes("rpm");
+        if (isFullbody) {
+          fullbodyRefs.push(ref);
+        }
+      }
+
+      this.avatarRefs = Array.from(new Set(allRefs));
+      this.fullbodyAvatarRefs = Array.from(new Set(fullbodyRefs));
       this.avatarRotationOffset = Math.floor(Math.random() * 1000);
       this.reseedBotAvatars();
     } catch (e) {
       console.warn("Failed to fetch featured avatars for bots", e);
       this.avatarRefs = [];
+      this.fullbodyAvatarRefs = [];
     }
   },
 
   refreshPatrolPoints() {
-    const points = [];
+    const allPoints = [];
+    const spawnFlagPoints = [];
+    const namedSpawbots = [];
 
     if (shouldUseNewLoader()) {
       const world = window.APP && window.APP.world;
@@ -144,16 +172,23 @@ AFRAME.registerSystem("bot-runner-system", {
 
           const obj = world.eid2obj.get(eid);
           if (!obj) continue;
-          const pointName = (obj.name || `spawn-${eid}`).trim();
-          const isNamedSpawbot = pointName.toLowerCase().startsWith("spawbot-");
-          if (!isNamedSpawbot && !(flags & WaypointFlags.canBeSpawnPoint)) continue;
+          const rawName = (obj.name || `waypoint-${eid}`).trim();
+          const pointName = rawName || `waypoint-${eid}`;
+          const lowerName = pointName.toLowerCase();
+          const isNamedSpawbot = lowerName.startsWith("spawbot-");
+          const isSpawnFlag = !!(flags & WaypointFlags.canBeSpawnPoint);
 
           obj.updateMatrices();
           const pos = obj.getWorldPosition(new THREE.Vector3());
-          points.push({
+          const point = {
             name: pointName,
-            position: pos
-          });
+            position: pos,
+            flags
+          };
+
+          allPoints.push(point);
+          if (isSpawnFlag) spawnFlagPoints.push(point);
+          if (isNamedSpawbot) namedSpawbots.push(point);
         }
       }
     } else {
@@ -166,34 +201,75 @@ AFRAME.registerSystem("bot-runner-system", {
 
         const obj = component.el && component.el.object3D;
         if (!obj) continue;
-        const pointName = (obj.name || component.el?.id || `spawn-${i}`).trim();
-        const isNamedSpawbot = pointName.toLowerCase().startsWith("spawbot-");
-        if (!isNamedSpawbot && !component.data.canBeSpawnPoint) continue;
+        const rawName = (obj.name || component.el?.id || `waypoint-${i}`).trim();
+        const pointName = rawName || `waypoint-${i}`;
+        const lowerName = pointName.toLowerCase();
+        const isNamedSpawbot = lowerName.startsWith("spawbot-");
+        const isSpawnFlag = !!component.data.canBeSpawnPoint;
 
         obj.updateMatrices();
         const pos = obj.getWorldPosition(new THREE.Vector3());
-        points.push({
+        const point = {
           name: pointName,
-          position: pos
-        });
+          position: pos,
+          flags: component.data
+        };
+
+        allPoints.push(point);
+        if (isSpawnFlag) spawnFlagPoints.push(point);
+        if (isNamedSpawbot) namedSpawbots.push(point);
       }
     }
 
-    const namedSpawbots = points.filter(point => (point.name || "").toLowerCase().startsWith("spawbot-"));
-    this.spawnPoints = namedSpawbots.length ? namedSpawbots : points;
-    // Use explicit spawbots for patrol only when there are at least 2, otherwise
-    // fall back to all spawn-capable points so bots can actually move.
-    this.patrolPoints = namedSpawbots.length >= 2 ? namedSpawbots : points;
+    this.allWaypoints = allPoints;
+    this.spawnFlagPoints = spawnFlagPoints;
+    this.namedSpawbots = namedSpawbots;
+
+    // Spawn priority:
+    // 1) named "spawbot-*" waypoints
+    // 2) waypoints marked as spawn points
+    // 3) any waypoint in the scene (so bots never default to origin when waypoints exist)
+    this.spawnPoints = namedSpawbots.length ? namedSpawbots : spawnFlagPoints.length ? spawnFlagPoints : allPoints;
+
+    // Patrol priority:
+    // 1) named "spawbot-*" waypoints (only when there are at least 2 so movement is possible)
+    // 2) any waypoint in the scene
+    // 3) spawn-flagged waypoints
+    this.patrolPoints =
+      namedSpawbots.length >= 2
+        ? namedSpawbots
+        : allPoints.length >= 2
+          ? allPoints
+          : spawnFlagPoints.length >= 2
+            ? spawnFlagPoints
+            : [];
+
+    if (this.debug) {
+      console.log(
+        `[bot-runner] Waypoints: all=${allPoints.length} spawnFlag=${spawnFlagPoints.length} spawbot=${namedSpawbots.length} spawnPoints=${this.spawnPoints.length} patrolPoints=${this.patrolPoints.length}`
+      );
+      if (namedSpawbots.length) {
+        console.log(
+          "[bot-runner] spawbot-*:",
+          namedSpawbots.map(p => p.name)
+        );
+      }
+    }
+  },
+
+  getPreferredAvatarRefs() {
+    return this.fullbodyAvatarRefs.length ? this.fullbodyAvatarRefs : this.avatarRefs;
   },
 
   pickAvatarId(botId = null) {
-    if (this.avatarRefs.length) {
+    const refs = this.getPreferredAvatarRefs();
+    if (refs.length) {
       if (botId) {
-        const index = (this.botIndex(botId) + this.avatarRotationOffset) % this.avatarRefs.length;
-        return this.avatarRefs[index];
+        const index = (this.botIndex(botId) + this.avatarRotationOffset) % refs.length;
+        return refs[index];
       }
 
-      return this.avatarRefs[Math.floor(Math.random() * this.avatarRefs.length)];
+      return refs[Math.floor(Math.random() * refs.length)];
     }
 
     const fallbackProfileAvatarId = window.APP?.store?.state?.profile?.avatarId;
@@ -201,11 +277,12 @@ AFRAME.registerSystem("bot-runner-system", {
   },
 
   reseedBotAvatars() {
-    if (!this.avatarRefs.length) return;
+    const refs = this.getPreferredAvatarRefs();
+    if (!refs.length) return;
 
     this.bots.forEach(record => {
       const currentAvatarId = record.el?.components?.["bot-info"]?.data?.avatarId;
-      if (currentAvatarId && this.avatarRefs.includes(currentAvatarId)) return;
+      if (currentAvatarId && refs.includes(currentAvatarId)) return;
 
       record.el.setAttribute("bot-info", "avatarId", this.pickAvatarId(record.id));
     });
@@ -263,6 +340,54 @@ AFRAME.registerSystem("bot-runner-system", {
     );
   },
 
+  ensureRaycastRoots() {
+    if (this._raycastRoots) return this._raycastRoots;
+
+    const env = this.el.sceneEl && this.el.sceneEl.querySelector("#environment-root");
+    const objects = this.el.sceneEl && this.el.sceneEl.querySelector("#objects-root");
+
+    const roots = [];
+    if (env && env.object3D) roots.push(env.object3D);
+    if (objects && objects.object3D) roots.push(objects.object3D);
+
+    this._raycastRoots = roots;
+    return roots;
+  },
+
+  isPathClear(fromPosition, toPosition) {
+    if (!fromPosition || !toPosition) return true;
+
+    const roots = this.ensureRaycastRoots();
+    if (!roots || roots.length === 0) return true;
+
+    this._tmpRayOrigin.copy(fromPosition);
+    this._tmpRayTarget.copy(toPosition);
+    this._tmpRayOrigin.y += WAYPOINT_RAYCAST_HEIGHT_M;
+    this._tmpRayTarget.y += WAYPOINT_RAYCAST_HEIGHT_M;
+
+    this._tmpRayDir.copy(this._tmpRayTarget).sub(this._tmpRayOrigin);
+    const distance = this._tmpRayDir.length();
+    if (distance <= WAYPOINT_RAYCAST_ENDPOINT_EPSILON_M * 2) return true;
+
+    this._tmpRayDir.normalize();
+    this._raycaster.set(this._tmpRayOrigin, this._tmpRayDir);
+    this._raycaster.far = distance;
+
+    for (let i = 0; i < roots.length; i++) {
+      const root = roots[i];
+      const hits = this._raycaster.intersectObject(root, true);
+      if (!hits || hits.length === 0) continue;
+
+      const hit = hits[0];
+      const d = hit.distance;
+      if (d > WAYPOINT_RAYCAST_ENDPOINT_EPSILON_M && d < distance - WAYPOINT_RAYCAST_ENDPOINT_EPSILON_M) {
+        return false;
+      }
+    }
+
+    return true;
+  },
+
   pickPatrolPoint(excludeName, fromPosition) {
     if (!this.patrolPoints.length) return null;
 
@@ -272,7 +397,31 @@ AFRAME.registerSystem("bot-runner-system", {
       return point.position.distanceToSquared(fromPosition) > 0.04;
     });
     const source = candidates.length ? candidates : this.patrolPoints;
-    return source[Math.floor(Math.random() * source.length)];
+
+    if (!fromPosition) {
+      return source[Math.floor(Math.random() * source.length)];
+    }
+
+    // Prefer a reachable target (line of sight at ~0.20m above ground).
+    const indices = Array.from({ length: source.length }, (_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = indices[i];
+      indices[i] = indices[j];
+      indices[j] = tmp;
+    }
+
+    const maxAttempts = Math.min(8, indices.length);
+    for (let i = 0; i < maxAttempts; i++) {
+      const point = source[indices[i]];
+      if (!point) continue;
+      if (this.isPathClear(fromPosition, point.position)) return point;
+      if (this.debug) {
+        console.log(`[bot-runner] Path blocked: ${excludeName || "(none)"} -> ${point.name}`);
+      }
+    }
+
+    return null;
   },
 
   createBot(botId, config) {
@@ -329,14 +478,14 @@ AFRAME.registerSystem("bot-runner-system", {
 
   initialIdleDurationMs(mobility) {
     if (mobility === "low") {
-      return 1200 + Math.floor(Math.random() * 1600);
+      return 2000 + Math.floor(Math.random() * 3000);
     }
 
     if (mobility === "high") {
-      return 300 + Math.floor(Math.random() * 700);
+      return 800 + Math.floor(Math.random() * 1000);
     }
 
-    return 500 + Math.floor(Math.random() * 1000);
+    return 1200 + Math.floor(Math.random() * 1300);
   },
 
   reconcileBots(force = false) {
@@ -377,9 +526,15 @@ AFRAME.registerSystem("bot-runner-system", {
     let target = null;
 
     if (waypointName) {
-      target = this.patrolPoints.find(
-        point => point.name === waypointName || point.name?.toLowerCase() === waypointName
-      );
+      const desired = String(waypointName).trim().toLowerCase();
+      target = this.allWaypoints.find(point => (point.name || "").trim().toLowerCase() === desired);
+
+      if (target && !this.isPathClear(record.position, target.position)) {
+        if (this.debug) {
+          console.log(`[bot-runner] Commanded waypoint blocked, skipping: ${desired}`);
+        }
+        target = null;
+      }
     }
 
     if (!target) {
@@ -392,7 +547,9 @@ AFRAME.registerSystem("bot-runner-system", {
         position: this.randomNearbyDestination(record)
       };
     } else if (target.position.distanceTo(record.position) <= 0.08) {
-      target = {
+      // If we accidentally picked a point right on top of us, try another patrol point before falling back to wander.
+      const alt = this.pickPatrolPoint(target.name, record.position);
+      target = alt || {
         name: "__wander__",
         position: this.randomNearbyDestination(record)
       };
@@ -420,7 +577,7 @@ AFRAME.registerSystem("bot-runner-system", {
     if (!record) return;
 
     if (command.type === "go_to_waypoint" && command.waypoint) {
-      this.startWalking(record, String(command.waypoint).toLowerCase());
+      this.startWalking(record, String(command.waypoint));
     }
   },
 

@@ -1122,7 +1122,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       isMobileVR: isThisMobileVR,
       isEmbed,
       hubInviteId: qs.get("hub_invite_id"),
-      authToken: store.state.credentials && store.state.credentials.token
+      authToken: store.state.credentials && store.state.credentials.token,
+      botRunner: qsTruthy("bot_runner")
     });
   };
 

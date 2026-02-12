@@ -28,9 +28,14 @@ function usePeopleList(presences, mySessionId, micUpdateFrequency = 500) {
       const micPresences = getMicrophonePresences();
 
       setPeople(
-        Object.entries(presences).map(([id, presence]) => {
-          return userFromPresence(id, presence, micPresences, mySessionId, voiceChatEnabled);
-        })
+        Object.entries(presences)
+          .filter(([, presence]) => {
+            const meta = presence && presence.metas && presence.metas[presence.metas.length - 1];
+            return !(meta && meta.context && meta.context.bot_runner);
+          })
+          .map(([id, presence]) => {
+            return userFromPresence(id, presence, micPresences, mySessionId, voiceChatEnabled);
+          })
       );
 
       timeout = setTimeout(updateMicrophoneState, micUpdateFrequency);

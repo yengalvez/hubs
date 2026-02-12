@@ -11,13 +11,23 @@ export function getCurrentHubId() {
   );
 }
 
+function countNonBotRunnerPresences(presenceState) {
+  let count = 0;
+  for (const presence of Object.values(presenceState || {})) {
+    const meta = presence && presence.metas && presence.metas[presence.metas.length - 1];
+    if (meta && meta.context && meta.context.bot_runner) continue;
+    count += 1;
+  }
+  return count;
+}
+
 export function updateVRHudPresenceCount({ presence }) {
-  const occupantCount = Object.getOwnPropertyNames(presence.state).length;
+  const occupantCount = countNonBotRunnerPresences(presence.state);
   const vrHudPresenceCount = document.querySelector("#hud-presence-count");
   vrHudPresenceCount.setAttribute("text", "value", occupantCount.toString());
 }
 export function updateSceneCopresentState(presence, scene) {
-  const occupantCount = Object.getOwnPropertyNames(presence.state).length;
+  const occupantCount = countNonBotRunnerPresences(presence.state);
   if (occupantCount > 1) {
     scene.addState("copresent");
   } else {
@@ -33,7 +43,8 @@ export function createHubChannelParams({
   isMobileVR,
   isEmbed,
   hubInviteId,
-  authToken
+  authToken,
+  botRunner
 }) {
   return {
     profile,
@@ -43,7 +54,8 @@ export function createHubChannelParams({
     context: {
       mobile: isMobile || isMobileVR,
       embed: isEmbed,
-      hmd: isMobileVR
+      hmd: isMobileVR,
+      bot_runner: !!botRunner
     },
     hub_invite_id: hubInviteId
   };

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { fetchReticulumAuthenticated } from "../../utils/phoenix-utils";
 import { BotChatPanel } from "./BotChatPanel";
@@ -11,19 +11,28 @@ function makeMessage(author, authorLabel, text) {
     id: `bot-chat-${nextMessageId}`,
     author,
     authorLabel,
-    text
+    text,
+    ts: Date.now()
   };
 }
 
-export function BotChatPanelContainer({ scene, hubChannel, hubSid, botId, botName, onClose }) {
-  const [messages, setMessages] = useState([]);
-  const [inputValue, setInputValue] = useState("");
+export function BotChatPanelContainer({
+  scene,
+  hubChannel,
+  hubSid,
+  botId,
+  botName,
+  messages,
+  inputValue,
+  sendingDisabled,
+  conversations,
+  activeBotId,
+  onSelectConversation,
+  onClose,
+  onInputChange,
+  onAppendMessage
+}) {
   const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    setMessages([]);
-    setInputValue("");
-  }, [botId]);
 
   const canChat = useMemo(() => {
     return !!(hubSid && botId && hubChannel && hubChannel.signedIn);
@@ -52,17 +61,14 @@ export function BotChatPanelContainer({ scene, hubChannel, hubSid, botId, botNam
   const onSend = useCallback(
     async e => {
       e.preventDefault();
-      const message = inputValue.trim();
-      if (!message || sending) return;
+      const message = (inputValue || "").trim();
+      if (!message || sending || sendingDisabled) return;
 
-      setInputValue("");
-      setMessages(prev => [...prev, makeMessage("user", "You", message)]);
+      onInputChange("");
+      onAppendMessage(makeMessage("user", "You", message));
 
       if (!canChat) {
-        setMessages(prev => [
-          ...prev,
-          makeMessage("system", "System", "Sign in is required before using private bot chat.")
-        ]);
+        onAppendMessage(makeMessage("system", "System", "Sign in is required before using private bot chat."));
         return;
       }
 
@@ -89,26 +95,36 @@ export function BotChatPanelContainer({ scene, hubChannel, hubSid, botId, botNam
         }
 
         const reply = (result && result.reply) || "No reply from bot.";
-        setMessages(prev => [...prev, makeMessage("bot", botName || "Bot", reply)]);
+        onAppendMessage(makeMessage("bot", botName || "Bot", reply));
 
         if (result && result.action) {
           sendCommandToRunner(result.action);
-          setMessages(prev => [
-            ...prev,
+          onAppendMessage(
             makeMessage(
               "system",
               "System",
               `Action queued: ${result.action.type}${result.action.waypoint ? ` -> ${result.action.waypoint}` : ""}`
             )
-          ]);
+          );
         }
       } catch (err) {
-        setMessages(prev => [...prev, makeMessage("system", "System", err.message || "Bot chat request failed.")]);
+        onAppendMessage(makeMessage("system", "System", err.message || "Bot chat request failed."));
       } finally {
         setSending(false);
       }
     },
-    [inputValue, sending, canChat, hubSid, botId, botName, sendCommandToRunner]
+    [
+      inputValue,
+      sending,
+      sendingDisabled,
+      canChat,
+      hubSid,
+      botId,
+      botName,
+      sendCommandToRunner,
+      onInputChange,
+      onAppendMessage
+    ]
   );
 
   return (
@@ -117,8 +133,12 @@ export function BotChatPanelContainer({ scene, hubChannel, hubSid, botId, botNam
       messages={messages}
       inputValue={inputValue}
       sending={sending}
+      sendingDisabled={sendingDisabled}
+      conversations={conversations}
+      activeBotId={activeBotId}
+      onSelectConversation={onSelectConversation}
       onClose={onClose}
-      onInputChange={e => setInputValue(e.target.value)}
+      onInputChange={e => onInputChange(e.target.value)}
       onSend={onSend}
     />
   );
@@ -130,5 +150,13 @@ BotChatPanelContainer.propTypes = {
   hubSid: PropTypes.string,
   botId: PropTypes.string,
   botName: PropTypes.string,
-  onClose: PropTypes.func.isRequired
+  messages: PropTypes.array.isRequired,
+  inputValue: PropTypes.string.isRequired,
+  sendingDisabled: PropTypes.bool,
+  conversations: PropTypes.array,
+  activeBotId: PropTypes.string,
+  onSelectConversation: PropTypes.func,
+  onClose: PropTypes.func.isRequired,
+  onInputChange: PropTypes.func.isRequired,
+  onAppendMessage: PropTypes.func.isRequired
 };

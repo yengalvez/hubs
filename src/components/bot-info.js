@@ -1,4 +1,5 @@
 import { getAvatarSrc } from "../utils/avatar-utils";
+import { ensureAvatarNodes } from "../utils/avatar-gltf-normalizer";
 
 AFRAME.registerComponent("bot-info", {
   schema: {
@@ -35,6 +36,11 @@ AFRAME.registerComponent("bot-info", {
 
     const modelEl = this.el.querySelector(".model");
     if (!modelEl) return;
+
+    const gltfModelPlus = modelEl.components && modelEl.components["gltf-model-plus"];
+    if (gltfModelPlus) {
+      gltfModelPlus.jsonPreprocessor = ensureAvatarNodes;
+    }
 
     const loadVersion = ++this._avatarLoadVersion;
     let avatarSrc;

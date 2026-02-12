@@ -1,8 +1,4 @@
-import { defineQuery } from "bitecs";
 import * as THREE from "three";
-import { Waypoint, SceneRoot } from "../bit-components";
-import { WaypointFlags } from "../bit-systems/waypoint";
-import { findAncestorWithComponent, shouldUseNewLoader } from "../utils/bit-utils";
 import configs from "../utils/configs";
 import { fetchReticulumAuthenticated } from "../utils/phoenix-utils";
 import qsTruthy from "../utils/qs_truthy";
@@ -13,8 +9,6 @@ const FEATURED_AVATARS_REFRESH_INTERVAL_MS = 60000;
 const BOT_COMMAND_TYPE = "bot_command";
 const WAYPOINT_RAYCAST_HEIGHT_M = 0.2;
 const WAYPOINT_RAYCAST_ENDPOINT_EPSILON_M = 0.1;
-
-const bitWaypointQuery = defineQuery([Waypoint]);
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -159,66 +153,42 @@ AFRAME.registerSystem("bot-runner-system", {
     const spawnFlagPoints = [];
     const namedSpawbots = [];
 
-    if (shouldUseNewLoader()) {
-      const world = window.APP && window.APP.world;
-      if (world) {
-        const eids = bitWaypointQuery(world);
+    const scene = this.el && this.el.sceneEl;
+    const waypointEls = scene
+      ? Array.from(scene.querySelectorAll("[waypoint]")).filter(el => !el.closest("a-assets"))
+      : [];
 
-        for (let i = 0; i < eids.length; i++) {
-          const eid = eids[i];
-          if (!findAncestorWithComponent(world, SceneRoot, eid)) continue;
+    for (let i = 0; i < waypointEls.length; i++) {
+      const waypointEl = waypointEls[i];
+      const waypointComponent = waypointEl.components && waypointEl.components.waypoint;
+      const data = (waypointComponent && waypointComponent.data) || null;
 
-          const flags = Waypoint.flags[eid];
+      const obj = waypointEl.object3D;
+      if (!obj) continue;
 
-          const obj = world.eid2obj.get(eid);
-          if (!obj) continue;
-          const rawName = (obj.name || `waypoint-${eid}`).trim();
-          const pointName = rawName || `waypoint-${eid}`;
-          const lowerName = pointName.toLowerCase();
-          const isNamedSpawbot = lowerName.startsWith("spawbot-");
-          const isSpawnFlag = !!(flags & WaypointFlags.canBeSpawnPoint);
-
-          obj.updateMatrices();
-          const pos = obj.getWorldPosition(new THREE.Vector3());
-          const point = {
-            name: pointName,
-            position: pos,
-            flags
-          };
-
-          allPoints.push(point);
-          if (isSpawnFlag) spawnFlagPoints.push(point);
-          if (isNamedSpawbot) namedSpawbots.push(point);
-        }
-      }
-    } else {
-      const waypointSystem = this.el.sceneEl.systems?.["hubs-systems"]?.waypointSystem;
-      const ready = (waypointSystem && waypointSystem.ready) || [];
-
-      for (let i = 0; i < ready.length; i++) {
-        const component = ready[i];
-        if (!component || !component.data) continue;
-
-        const obj = component.el && component.el.object3D;
-        if (!obj) continue;
-        const rawName = (obj.name || component.el?.id || `waypoint-${i}`).trim();
-        const pointName = rawName || `waypoint-${i}`;
-        const lowerName = pointName.toLowerCase();
-        const isNamedSpawbot = lowerName.startsWith("spawbot-");
-        const isSpawnFlag = !!component.data.canBeSpawnPoint;
-
+      // Ensure world transforms are up to date before sampling positions.
+      if (typeof obj.updateMatrices === "function") {
         obj.updateMatrices();
-        const pos = obj.getWorldPosition(new THREE.Vector3());
-        const point = {
-          name: pointName,
-          position: pos,
-          flags: component.data
-        };
-
-        allPoints.push(point);
-        if (isSpawnFlag) spawnFlagPoints.push(point);
-        if (isNamedSpawbot) namedSpawbots.push(point);
+      } else if (typeof obj.updateMatrixWorld === "function") {
+        obj.updateMatrixWorld(true);
       }
+
+      const rawName = (obj.name || waypointEl.id || `waypoint-${i}`).trim();
+      const pointName = rawName || `waypoint-${i}`;
+      const lowerName = pointName.toLowerCase();
+      const isNamedSpawbot = lowerName.startsWith("spawbot-");
+      const isSpawnFlag = !!(data && data.canBeSpawnPoint);
+
+      const pos = obj.getWorldPosition(new THREE.Vector3());
+      const point = {
+        name: pointName,
+        position: pos,
+        flags: data
+      };
+
+      allPoints.push(point);
+      if (isSpawnFlag) spawnFlagPoints.push(point);
+      if (isNamedSpawbot) namedSpawbots.push(point);
     }
 
     this.allWaypoints = allPoints;
@@ -431,6 +401,9 @@ AFRAME.registerSystem("bot-runner-system", {
 
     const el = document.createElement("a-entity");
     el.setAttribute("networked", "template: #remote-bot-avatar; attachTemplateToLocal: false;");
+    // Re-send periodic isFirstSync messages to mitigate missed instantiation messages on late-joining clients.
+    // This is the same technique used for the local avatar rig (`periodic-full-syncs`).
+    el.setAttribute("periodic-full-syncs", "");
     el.setAttribute("position", startPos);
     el.setAttribute("rotation", { x: 0, y: Math.random() * 360, z: 0 });
     el.setAttribute("bot-info", {
@@ -439,6 +412,31 @@ AFRAME.registerSystem("bot-runner-system", {
       displayName: botId
     });
     this.el.sceneEl.appendChild(el);
+
+    // Best-effort immediate full sync once networked is initialized (periodic-full-syncs will keep retrying).
+    const trySyncOnce = () => {
+      const networked = el.components && el.components.networked;
+      if (!networked || typeof networked.syncAll !== "function") return false;
+      try {
+        networked.syncAll(null, true);
+      } catch {
+        // Best-effort only. periodic-full-syncs will retry.
+      }
+      return true;
+    };
+    if (!trySyncOnce()) {
+      const onInit = e => {
+        if (e && e.detail && e.detail.name === "networked") {
+          el.removeEventListener("componentinitialized", onInit);
+          trySyncOnce();
+        }
+      };
+      el.addEventListener("componentinitialized", onInit);
+      setTimeout(() => {
+        el.removeEventListener("componentinitialized", onInit);
+        trySyncOnce();
+      }, 2000);
+    }
 
     const idleDuration = this.initialIdleDurationMs(config.mobility);
 

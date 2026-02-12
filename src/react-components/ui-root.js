@@ -118,6 +118,29 @@ import { findAncestorWithComponent, shouldUseNewLoader } from "../utils/bit-util
 const avatarEditorDebug = qsTruthy("avatarEditorDebug");
 
 const IN_ROOM_MODAL_ROUTER_PATHS = ["/media"];
+
+function getBuildVersionInfo() {
+  const raw = (process.env.BUILD_VERSION || "").trim();
+  if (raw) {
+    const match = raw.match(/\(([0-9a-f]{7,40})\)/i) || raw.match(/([0-9a-f]{7,40})/i);
+    const short = match ? match[1].slice(0, 7) : raw.slice(0, 12);
+    return { short, full: raw };
+  }
+
+  if (typeof document !== "undefined") {
+    const scripts = Array.from(document.querySelectorAll("script[src]"));
+    for (const script of scripts) {
+      const src = script.getAttribute("src") || "";
+      const match = src.match(/assets\/js\/[^/]+-([0-9a-f]{8,})\.js/i);
+      if (match) {
+        const hash = match[1];
+        return { short: hash.slice(0, 8), full: hash };
+      }
+    }
+  }
+
+  return { short: "?", full: "" };
+}
 const IN_ROOM_MODAL_QUERY_VARS = ["media_source"];
 
 const LOBBY_MODAL_ROUTER_PATHS = ["/media/scenes", "/media/avatars", "/media/favorites"];
@@ -1507,6 +1530,7 @@ class UIRoot extends Component {
     const activeBotChatMessages = (activeBotChatSession && activeBotChatSession.messages) || [];
     const activeBotChatDraft = (activeBotChatSession && activeBotChatSession.draft) || "";
     const inVrMode = this.props.scene?.is("vr-mode");
+    const buildVersionInfo = enteredOrWatching ? getBuildVersionInfo() : null;
     const displayNameOverride = this.props.hubIsBound
       ? getPresenceProfileForSession(this.props.presences, this.props.sessionId).displayName
       : null;
@@ -2195,6 +2219,15 @@ class UIRoot extends Component {
                         preset="accept"
                         label={<FormattedMessage id="toolbar.enter-vr-button" defaultMessage="Enter VR" />}
                         onClick={() => exit2DInterstitialAndEnterVR(true)}
+                      />
+                    )}
+                    {entered && buildVersionInfo && (
+                      <ToolbarButton
+                        preset="transparent"
+                        disabled
+                        icon={null}
+                        label={<span style={{ fontFamily: "monospace", fontSize: 12 }}>{buildVersionInfo.short}</span>}
+                        title={buildVersionInfo.full ? `Build ${buildVersionInfo.full}` : "Build version unavailable"}
                       />
                     )}
                     {entered && (

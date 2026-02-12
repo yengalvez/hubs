@@ -56,6 +56,7 @@ AFRAME.registerSystem("bot-runner-system", {
     this.enabled = !!configs.feature("enable_room_bots") && qsTruthy("bot_runner");
     this.bots = new Map();
     this.avatarRefs = [];
+    this.avatarRotationOffset = Math.floor(Math.random() * 1000);
     this.spawnPoints = [];
     this.patrolPoints = [];
     this.lastConfigRefreshAt = 0;
@@ -117,7 +118,8 @@ AFRAME.registerSystem("bot-runner-system", {
         .map(entry => (entry && entry.gltfs && entry.gltfs.avatar) || null)
         .filter(Boolean);
 
-      this.avatarRefs = refs;
+      this.avatarRefs = Array.from(new Set(refs));
+      this.avatarRotationOffset = Math.floor(Math.random() * 1000);
       this.reseedBotAvatars();
     } catch (e) {
       console.warn("Failed to fetch featured avatars for bots", e);
@@ -183,8 +185,13 @@ AFRAME.registerSystem("bot-runner-system", {
     this.patrolPoints = namedSpawbots.length >= 2 ? namedSpawbots : points;
   },
 
-  pickAvatarId() {
+  pickAvatarId(botId = null) {
     if (this.avatarRefs.length) {
+      if (botId) {
+        const index = (this.botIndex(botId) + this.avatarRotationOffset) % this.avatarRefs.length;
+        return this.avatarRefs[index];
+      }
+
       return this.avatarRefs[Math.floor(Math.random() * this.avatarRefs.length)];
     }
 
@@ -199,7 +206,7 @@ AFRAME.registerSystem("bot-runner-system", {
       const currentAvatarId = record.el?.components?.["bot-info"]?.data?.avatarId;
       if (currentAvatarId && this.avatarRefs.includes(currentAvatarId)) return;
 
-      record.el.setAttribute("bot-info", "avatarId", this.pickAvatarId());
+      record.el.setAttribute("bot-info", "avatarId", this.pickAvatarId(record.id));
     });
   },
 
@@ -270,7 +277,7 @@ AFRAME.registerSystem("bot-runner-system", {
   createBot(botId, config) {
     const startPoint = this.pickSpawnPoint(botId);
     const startPos = startPoint ? this.positionForSpawnPoint(startPoint, botId) : new THREE.Vector3();
-    const avatarId = this.pickAvatarId();
+    const avatarId = this.pickAvatarId(botId);
 
     const el = document.createElement("a-entity");
     el.setAttribute("networked", "template: #remote-bot-avatar; attachTemplateToLocal: false;");
@@ -283,7 +290,7 @@ AFRAME.registerSystem("bot-runner-system", {
     });
     this.el.sceneEl.appendChild(el);
 
-    const idleDuration = this.randomIdleDurationMs(config.mobility);
+    const idleDuration = this.initialIdleDurationMs(config.mobility);
 
     this.bots.set(botId, {
       id: botId,
@@ -317,6 +324,18 @@ AFRAME.registerSystem("bot-runner-system", {
     const behavior = MOBILITY_BEHAVIOR[mobility] || MOBILITY_BEHAVIOR.medium;
     const range = behavior.idleMaxMs - behavior.idleMinMs;
     return behavior.idleMinMs + Math.floor(Math.random() * Math.max(range, 1));
+  },
+
+  initialIdleDurationMs(mobility) {
+    if (mobility === "low") {
+      return 1200 + Math.floor(Math.random() * 1600);
+    }
+
+    if (mobility === "high") {
+      return 300 + Math.floor(Math.random() * 700);
+    }
+
+    return 500 + Math.floor(Math.random() * 1000);
   },
 
   reconcileBots(force = false) {

@@ -207,23 +207,41 @@ AFRAME.registerSystem("bot-runner-system", {
     const points = this.spawnPoints.length ? this.spawnPoints : this.patrolPoints;
     if (!points.length) return null;
 
-    const index = Math.max(Number(String(botId).replace("bot-", "")) - 1, 0);
+    const index = this.botIndex(botId);
     return points[index % points.length];
   },
 
-  positionForSpawnPoint(point, botId) {
-    const pos = point.position.clone();
-    if ((this.spawnPoints.length ? this.spawnPoints : this.patrolPoints).length > 1) return pos;
+  botIndex(botId) {
+    return Math.max(Number(String(botId).replace("bot-", "")) - 1, 0);
+  },
 
-    // If only one spawn point exists, spread bots slightly to avoid perfect overlap.
-    const index = Math.max(Number(String(botId).replace("bot-", "")) - 1, 0);
-    if (index === 0) return pos;
+  separateNearbyPosition(position, botId, radius = 0.8) {
+    const adjusted = position.clone();
+    const index = this.botIndex(botId);
+    if (index === 0) return adjusted;
+
+    const minDistanceSq = 0.36;
+    let conflicts = 0;
+
+    this.bots.forEach(record => {
+      if (!record || record.id === botId) return;
+      if (record.position.distanceToSquared(adjusted) < minDistanceSq) {
+        conflicts += 1;
+      }
+    });
+
+    if (!conflicts) return adjusted;
 
     const angle = index * ((Math.PI * 2) / 6);
-    const radius = 0.8;
-    this._tmpSpawnOffset.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-    pos.add(this._tmpSpawnOffset);
-    return pos;
+    const spreadRadius = radius + Math.min(conflicts, 2) * 0.2;
+    this._tmpSpawnOffset.set(Math.cos(angle) * spreadRadius, 0, Math.sin(angle) * spreadRadius);
+    adjusted.add(this._tmpSpawnOffset);
+
+    return adjusted;
+  },
+
+  positionForSpawnPoint(point, botId) {
+    return this.separateNearbyPosition(point.position, botId, 0.8);
   },
 
   randomNearbyDestination(record) {
@@ -361,9 +379,10 @@ AFRAME.registerSystem("bot-runner-system", {
     }
 
     record.state = "walk";
+    const destination = this.separateNearbyPosition(target.position, record.id, 0.45);
     record.destination = {
       name: target.name,
-      position: target.position.clone()
+      position: destination
     };
   },
 

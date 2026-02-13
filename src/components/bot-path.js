@@ -130,7 +130,9 @@ AFRAME.registerComponent("bot-path", {
     // If we receive a new movement segment but our current rendered position is far from the segment start,
     // it means we missed/delayed an update. Snap-correct by treating the segment start as "where we are now"
     // so the next walk begins from the visible location instead of jumping.
-    if (this.el.object3D) {
+    // Important: only do this after we've rendered at least one frame of a previous segment. Otherwise,
+    // newly-instantiated bots start at the origin before their first path is applied.
+    if (this.el.object3D && this._hasApplied) {
       const d = this.data;
       const dur = Math.max(0, Number(d.dur) || 0);
 

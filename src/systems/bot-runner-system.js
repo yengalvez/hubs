@@ -25,7 +25,7 @@ function normalizeAngleDeg(deg) {
 function normalizeBotsConfig(config) {
   const normalized = {
     enabled: !!(config && config.enabled),
-    count: clamp(Number((config && config.count) || 0) || 0, 0, 5),
+    count: clamp(Number((config && config.count) || 0) || 0, 0, 10),
     mobility: (config && config.mobility) || "medium",
     chatEnabled: !!(config && config.chat_enabled)
   };

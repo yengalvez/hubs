@@ -146,6 +146,33 @@ AFRAME.registerComponent("bot-info", {
     }
     forwardWorld.normalize();
 
+    // Disambiguate the "front" direction using the eyes (real or injected by the GLTF normalizer).
+    // Many rigs have a consistent left/right/up basis but may still be flipped 180deg relative to
+    // their visible facing direction. The midpoint between the eyes should always be "in front"
+    // of the hips for humanoids. If our computed forward points away from the eyes, flip it.
+    const leftEye = root.getObjectByName("LeftEye");
+    const rightEye = root.getObjectByName("RightEye");
+    if (leftEye && rightEye) {
+      const leftEyePos = new Vector3();
+      const rightEyePos = new Vector3();
+      leftEye.getWorldPosition(leftEyePos);
+      rightEye.getWorldPosition(rightEyePos);
+      const eyeMid = leftEyePos.add(rightEyePos).multiplyScalar(0.5);
+      const faceDir = eyeMid.sub(hipsPos);
+      faceDir.y = 0;
+      if (faceDir.lengthSq() > 1e-6) {
+        faceDir.normalize();
+        const f = forwardWorld.clone();
+        f.y = 0;
+        if (f.lengthSq() > 1e-6) {
+          f.normalize();
+          if (f.dot(faceDir) < 0) {
+            forwardWorld.multiplyScalar(-1);
+          }
+        }
+      }
+    }
+
     // Convert to bot-local space so this works regardless of the bot's current yaw.
     const botRoot = this.el.object3D;
     if (!botRoot) {

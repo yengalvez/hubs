@@ -74,7 +74,21 @@ export function BotChatPanel({
         <div className={styles.messages}>
           {messages.map((message, index) => {
             const prev = index > 0 ? messages[index - 1] : null;
-            const showAuthor = !prev || prev.author !== message.author;
+            const next = index < messages.length - 1 ? messages[index + 1] : null;
+
+            const prevAuthor = prev ? prev.author : null;
+            const nextAuthor = next ? next.author : null;
+            const isGroupStart = prevAuthor !== message.author;
+            const isGroupEnd = nextAuthor !== message.author;
+            const showAvatar = isGroupStart && message.author !== "system";
+            const showBotAuthor = isGroupStart && message.author === "bot";
+            const addGroupSpacing = isGroupStart && index > 0;
+
+            const avatarLetter = (() => {
+              if (message.author === "user") return "Y";
+              const label = (message.authorLabel || botName || "Bot").trim();
+              return (label[0] || "B").toUpperCase();
+            })();
 
             return (
               <div
@@ -82,19 +96,35 @@ export function BotChatPanel({
                 className={classNames(styles.messageRow, {
                   [styles.rowUser]: message.author === "user",
                   [styles.rowBot]: message.author === "bot",
-                  [styles.rowSystem]: message.author === "system"
+                  [styles.rowSystem]: message.author === "system",
+                  [styles.groupSpacing]: addGroupSpacing
                 })}
               >
+                {message.author !== "system" &&
+                  (showAvatar ? (
+                    <div
+                      className={classNames(styles.avatarChip, {
+                        [styles.avatarChipUser]: message.author === "user",
+                        [styles.avatarChipBot]: message.author === "bot"
+                      })}
+                      aria-hidden="true"
+                    >
+                      {avatarLetter}
+                    </div>
+                  ) : (
+                    <div className={styles.avatarSpacer} aria-hidden="true" />
+                  ))}
                 <div
                   className={classNames(styles.bubble, {
                     [styles.bubbleUser]: message.author === "user",
                     [styles.bubbleBot]: message.author === "bot",
-                    [styles.bubbleSystem]: message.author === "system"
+                    [styles.bubbleSystem]: message.author === "system",
+                    [styles.bubbleGroupStart]: isGroupStart,
+                    [styles.bubbleGroupEnd]: isGroupEnd,
+                    [styles.bubbleTail]: isGroupEnd && message.author !== "system"
                   })}
                 >
-                  {showAuthor && message.author !== "system" && (
-                    <div className={styles.messageAuthor}>{message.authorLabel}</div>
-                  )}
+                  {showBotAuthor && <div className={styles.messageAuthor}>{message.authorLabel}</div>}
                   <div className={styles.messageBody}>{message.text}</div>
                 </div>
               </div>
@@ -103,6 +133,9 @@ export function BotChatPanel({
 
           {sending && (
             <div className={classNames(styles.messageRow, styles.rowBot)}>
+              <div className={classNames(styles.avatarChip, styles.avatarChipBot)} aria-hidden="true">
+                {(botName || "Bot")[0]?.toUpperCase?.() || "B"}
+              </div>
               <div className={classNames(styles.bubble, styles.bubbleBot, styles.typing)}>
                 <span className={styles.typingDot} />
                 <span className={styles.typingDot} />

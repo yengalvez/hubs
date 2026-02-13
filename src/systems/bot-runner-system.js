@@ -31,19 +31,19 @@ function normalizeBotsConfig(config) {
 
 const MOBILITY_BEHAVIOR = {
   low: {
-    speedMps: 0.7,
-    idleMinMs: 6000,
-    idleMaxMs: 16000
+    speedMps: 0.45,
+    idleMinMs: 8000,
+    idleMaxMs: 22000
   },
   medium: {
-    speedMps: 1.0,
-    idleMinMs: 3000,
-    idleMaxMs: 10000
+    speedMps: 0.75,
+    idleMinMs: 4500,
+    idleMaxMs: 14000
   },
   high: {
-    speedMps: 1.3,
-    idleMinMs: 1500,
-    idleMaxMs: 6000
+    speedMps: 1.05,
+    idleMinMs: 2500,
+    idleMaxMs: 8000
   }
 };
 

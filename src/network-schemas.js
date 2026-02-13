@@ -17,7 +17,7 @@ function registerNetworkSchemas() {
     };
   };
 
-  const botTransformRequiresUpdate = (posEpsilon, yawEpsilonDeg) => {
+  const botPathRequiresUpdate = (posEpsilon, yawEpsilonDeg, timeEpsilonMs) => {
     const angleDeltaDeg = (a, b) => {
       // Smallest absolute delta in degrees accounting for wrap at 360.
       const delta = ((a - b + 540) % 360) - 180;
@@ -30,26 +30,44 @@ function registerNetworkSchemas() {
       return curr => {
         if (!curr) return false;
 
-        const x = Number(curr.x) || 0;
-        const y = Number(curr.y) || 0;
-        const z = Number(curr.z) || 0;
-        const yaw = Number(curr.yaw) || 0;
+        const sx = Number(curr.sx) || 0;
+        const sy = Number(curr.sy) || 0;
+        const sz = Number(curr.sz) || 0;
+        const ex = Number(curr.ex) || 0;
+        const ey = Number(curr.ey) || 0;
+        const ez = Number(curr.ez) || 0;
+        const t0 = Number(curr.t0) || 0;
+        const dur = Number(curr.dur) || 0;
+        const yaw0 = Number(curr.yaw0) || 0;
+        const yaw1 = Number(curr.yaw1) || 0;
 
         if (prev === null) {
-          prev = { x, y, z, yaw };
+          prev = { sx, sy, sz, ex, ey, ez, t0, dur, yaw0, yaw1 };
           return true;
         }
 
         if (
-          Math.abs(x - prev.x) > posEpsilon ||
-          Math.abs(y - prev.y) > posEpsilon ||
-          Math.abs(z - prev.z) > posEpsilon ||
-          angleDeltaDeg(yaw, prev.yaw) > yawEpsilonDeg
+          Math.abs(sx - prev.sx) > posEpsilon ||
+          Math.abs(sy - prev.sy) > posEpsilon ||
+          Math.abs(sz - prev.sz) > posEpsilon ||
+          Math.abs(ex - prev.ex) > posEpsilon ||
+          Math.abs(ey - prev.ey) > posEpsilon ||
+          Math.abs(ez - prev.ez) > posEpsilon ||
+          Math.abs(t0 - prev.t0) > timeEpsilonMs ||
+          Math.abs(dur - prev.dur) > timeEpsilonMs ||
+          angleDeltaDeg(yaw0, prev.yaw0) > yawEpsilonDeg ||
+          angleDeltaDeg(yaw1, prev.yaw1) > yawEpsilonDeg
         ) {
-          prev.x = x;
-          prev.y = y;
-          prev.z = z;
-          prev.yaw = yaw;
+          prev.sx = sx;
+          prev.sy = sy;
+          prev.sz = sz;
+          prev.ex = ex;
+          prev.ey = ey;
+          prev.ez = ez;
+          prev.t0 = t0;
+          prev.dur = dur;
+          prev.yaw0 = yaw0;
+          prev.yaw1 = yaw1;
           return true;
         }
 
@@ -127,8 +145,8 @@ function registerNetworkSchemas() {
     template: "#remote-bot-avatar",
     components: [
       {
-        component: "bot-transform",
-        requiresNetworkUpdate: botTransformRequiresUpdate(0.005, 0.25)
+        component: "bot-path",
+        requiresNetworkUpdate: botPathRequiresUpdate(0.005, 0.5, 5)
       },
       "bot-info"
     ]

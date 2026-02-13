@@ -229,10 +229,10 @@
             </template>
 
             <template id="remote-bot-avatar">
-                <a-entity tags="inspectable: true" bot-info bot-transform visible="false">
+                <a-entity tags="inspectable: true" bot-info bot-path visible="false">
                     <a-entity class="model" gltf-model-plus="inflate: true">
                         <template data-name="AvatarRoot">
-                            <a-entity fullbody-locomotion></a-entity>
+                            <a-entity fullbody-locomotion="forceForward: true"></a-entity>
                         </template>
                     </a-entity>
                 </a-entity>

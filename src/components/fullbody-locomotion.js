@@ -20,6 +20,7 @@ AFRAME.registerComponent("fullbody-locomotion", {
   schema: {
     enabled: { type: "boolean", default: true },
     useSharedAnimations: { type: "boolean", default: true },
+    forceForward: { type: "boolean", default: false },
     speedThreshold: { type: "number", default: 0.15 }, // m/s
     runThreshold: { type: "number", default: 2.2 }, // m/s
     walkSwing: { type: "number", default: Math.PI / 8 }, // ~22.5deg
@@ -232,28 +233,32 @@ AFRAME.registerComponent("fullbody-locomotion", {
 
       let target = "idle";
       if (moving) {
-        // Decide between forward/back/strafe based on horizontal velocity in avatar-local space.
-        //
-        // Convention: in three.js, an object's "forward" is typically -Z in local space.
-        this._tmpVel.set(dx / dtSeconds, 0, dz / dtSeconds);
-
-        const dirRoot = (this._playerInfoEl && this._playerInfoEl.object3D) || root;
-        dirRoot.getWorldQuaternion(this._tmpQuat);
-        this._tmpQuat.invert();
-        this._tmpVel.applyQuaternion(this._tmpQuat);
-        this._tmpVel.y = 0;
-
-        const angle = Math.atan2(this._tmpVel.x, -this._tmpVel.z); // [-pi..pi], 0 = forward
-        const abs = Math.abs(angle);
-
-        if (abs <= Math.PI / 4) {
+        if (this.data.forceForward) {
           target = "walk";
-        } else if (abs >= (3 * Math.PI) / 4) {
-          target = "walkBack";
-        } else if (angle > 0) {
-          target = "strafeRight";
         } else {
-          target = "strafeLeft";
+          // Decide between forward/back/strafe based on horizontal velocity in avatar-local space.
+          //
+          // Convention: in three.js, an object's "forward" is typically -Z in local space.
+          this._tmpVel.set(dx / dtSeconds, 0, dz / dtSeconds);
+
+          const dirRoot = (this._playerInfoEl && this._playerInfoEl.object3D) || root;
+          dirRoot.getWorldQuaternion(this._tmpQuat);
+          this._tmpQuat.invert();
+          this._tmpVel.applyQuaternion(this._tmpQuat);
+          this._tmpVel.y = 0;
+
+          const angle = Math.atan2(this._tmpVel.x, -this._tmpVel.z); // [-pi..pi], 0 = forward
+          const abs = Math.abs(angle);
+
+          if (abs <= Math.PI / 4) {
+            target = "walk";
+          } else if (abs >= (3 * Math.PI) / 4) {
+            target = "walkBack";
+          } else if (angle > 0) {
+            target = "strafeRight";
+          } else {
+            target = "strafeLeft";
+          }
         }
       }
 

@@ -78,7 +78,7 @@ import "./components/offset-relative-to";
 import "./components/player-info";
 import "./components/fullbody-locomotion";
 import "./components/bot-info";
-import "./components/bot-transform";
+import "./components/bot-path";
 import "./components/name-tag";
 import "./components/debug";
 import "./components/hand-poses";

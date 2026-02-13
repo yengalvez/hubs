@@ -3,18 +3,15 @@ import configs from "../utils/configs";
 import { fetchReticulumAuthenticated } from "../utils/phoenix-utils";
 import qsTruthy from "../utils/qs_truthy";
 
-const NETWORK_PUBLISH_INTERVAL_MS = 100;
 const CONFIG_REFRESH_INTERVAL_MS = 3000;
 const FEATURED_AVATARS_REFRESH_INTERVAL_MS = 60000;
 const BOT_COMMAND_TYPE = "bot_command";
 const WAYPOINT_RAYCAST_HEIGHT_M = 0.2;
 const WAYPOINT_RAYCAST_ENDPOINT_EPSILON_M = 0.1;
 
-const BOT_RADIUS_M = 0.35;
-const SEPARATION_RADIUS_M = 1.2;
-const SEPARATION_RADIUS_SQ = SEPARATION_RADIUS_M * SEPARATION_RADIUS_M;
-const SEPARATION_STRENGTH = 0.8;
-const MAX_YAW_RATE_DEG_PER_S = 720;
+// Path movement is time-based so it stays smooth even if the headless runner hitches.
+const PATH_START_DELAY_MS = 150;
+const MIN_WALK_DURATION_MS = 600;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -23,21 +20,6 @@ function clamp(value, min, max) {
 function normalizeAngleDeg(deg) {
   const n = Number(deg) || 0;
   return ((n % 360) + 360) % 360;
-}
-
-function shortestAngleDeltaDeg(fromDeg, toDeg) {
-  // Returns the smallest signed delta in degrees in [-180, 180].
-  const from = normalizeAngleDeg(fromDeg);
-  const to = normalizeAngleDeg(toDeg);
-  return ((to - from + 540) % 360) - 180;
-}
-
-function rotateTowardsDeg(fromDeg, toDeg, maxDeltaDeg) {
-  const delta = shortestAngleDeltaDeg(fromDeg, toDeg);
-  const maxDelta = Math.max(0, Number(maxDeltaDeg) || 0);
-
-  if (Math.abs(delta) <= maxDelta) return normalizeAngleDeg(toDeg);
-  return normalizeAngleDeg(fromDeg + Math.sign(delta) * maxDelta);
 }
 
 function normalizeBotsConfig(config) {
@@ -88,14 +70,13 @@ AFRAME.registerSystem("bot-runner-system", {
     this.spawnFlagPoints = [];
     this.namedSpawbots = [];
     this.lastConfigRefreshAt = 0;
-    this.lastNetworkPublishAt = 0;
     this.lastFeaturedAvatarRefreshAt = 0;
     this._wasConnected = false;
     this._tmpDir = new THREE.Vector3();
     this._tmpSpawnOffset = new THREE.Vector3();
-    this._tmpSeparation = new THREE.Vector3();
-    this._tmpSteer = new THREE.Vector3();
-    this._tmpNeighborDiff = new THREE.Vector3();
+    this._tmpPathPos = new THREE.Vector3();
+    this._tmpPathStart = new THREE.Vector3();
+    this._tmpPathEnd = new THREE.Vector3();
     this._raycaster = new THREE.Raycaster();
     this._raycastRoots = null;
     this._tmpRayOrigin = new THREE.Vector3();
@@ -146,6 +127,14 @@ AFRAME.registerSystem("bot-runner-system", {
   getRoomBotsConfig() {
     const userData = (window.APP && window.APP.hub && window.APP.hub.user_data) || {};
     return normalizeBotsConfig(userData.bots || {});
+  },
+
+  getServerNowMs() {
+    const connection = window.NAF && window.NAF.connection;
+    if (connection && typeof connection.getServerTime === "function") {
+      return connection.getServerTime();
+    }
+    return performance.now();
   },
 
   async refreshFeaturedAvatarIds() {
@@ -460,13 +449,25 @@ AFRAME.registerSystem("bot-runner-system", {
     const startPos = startPoint ? this.positionForSpawnPoint(startPoint, botId) : new THREE.Vector3();
     const avatarId = this.pickAvatarId(botId);
     const startYaw = Math.random() * 360;
+    const now = this.getServerNowMs();
 
     const el = document.createElement("a-entity");
     el.setAttribute("networked", "template: #remote-bot-avatar; attachTemplateToLocal: false;");
     // Re-send periodic isFirstSync messages to mitigate missed instantiation messages on late-joining clients.
     // This is the same technique used for the local avatar rig (`periodic-full-syncs`).
     el.setAttribute("periodic-full-syncs", "");
-    el.setAttribute("bot-transform", { x: startPos.x, y: startPos.y, z: startPos.z, yaw: startYaw });
+    el.setAttribute("bot-path", {
+      sx: startPos.x,
+      sy: startPos.y,
+      sz: startPos.z,
+      ex: startPos.x,
+      ey: startPos.y,
+      ez: startPos.z,
+      t0: now,
+      dur: 0,
+      yaw0: startYaw,
+      yaw1: startYaw
+    });
     el.setAttribute("bot-info", {
       botId,
       avatarId,
@@ -509,8 +510,9 @@ AFRAME.registerSystem("bot-runner-system", {
       homePosition: startPos.clone(),
       yawDeg: normalizeAngleDeg(startYaw),
       destination: null,
+      path: null,
       reservedTargetName: null,
-      stateEndsAt: performance.now() + idleDuration,
+      stateEndsAt: now + idleDuration,
       mobility: config.mobility
     });
   },
@@ -584,7 +586,29 @@ AFRAME.registerSystem("bot-runner-system", {
     });
   },
 
-  startWalking(record, waypointName) {
+  updateRecordPositionFromPath(record, nowMs) {
+    const path = record && record.path;
+    if (!path) return;
+
+    const dur = Math.max(0, Number(path.dur) || 0);
+    const t0 = Number(path.t0) || 0;
+
+    let alpha = 1;
+    if (dur > 0) {
+      if (nowMs <= t0) {
+        alpha = 0;
+      } else {
+        alpha = (nowMs - t0) / dur;
+      }
+      alpha = clamp(alpha, 0, 1);
+    }
+
+    record.position.lerpVectors(path.startPos, path.endPos, alpha);
+  },
+
+  startWalking(record, waypointName, nowMs = this.getServerNowMs()) {
+    this.updateRecordPositionFromPath(record, nowMs);
+
     let target = null;
 
     if (waypointName) {
@@ -617,24 +641,76 @@ AFRAME.registerSystem("bot-runner-system", {
       };
     }
 
-    record.state = "walk";
     if (target.name && target.name !== "__wander__") {
       this.reserveTarget(record, target.name);
     } else {
       this.releaseReservation(record);
     }
+
+    const behavior = MOBILITY_BEHAVIOR[record.mobility] || MOBILITY_BEHAVIOR.medium;
+    const startPos = record.position.clone();
     const destination = this.separateNearbyPosition(target.position, record.id, 0.45);
-    record.destination = {
-      name: target.name,
-      position: destination
-    };
+    const endPos = destination.clone();
+
+    this._tmpDir.copy(endPos).sub(startPos);
+    const distance = this._tmpDir.length();
+    if (distance <= 0.08) {
+      // No meaningful movement possible; return to idle quickly.
+      this.setIdle(record, nowMs);
+      return;
+    }
+
+    const speedMps = Math.max(0.05, Number(behavior.speedMps) || 0.75);
+    const durMs = Math.max(MIN_WALK_DURATION_MS, (distance / speedMps) * 1000);
+    const t0 = nowMs + PATH_START_DELAY_MS;
+
+    // Face the direction of travel. For most glTF avatars, +Z is "forward".
+    const desiredYaw = normalizeAngleDeg(THREE.MathUtils.radToDeg(Math.atan2(this._tmpDir.x, this._tmpDir.z)));
+    const yaw0 = normalizeAngleDeg(record.yawDeg);
+    const yaw1 = desiredYaw;
+
+    record.state = "walk";
+    record.destination = { name: target.name, position: endPos };
+    record.path = { startPos, endPos, t0, dur: durMs, yaw0, yaw1 };
+    record.stateEndsAt = t0 + durMs;
+    record.yawDeg = yaw1;
+
+    record.el.setAttribute("bot-path", {
+      sx: startPos.x,
+      sy: startPos.y,
+      sz: startPos.z,
+      ex: endPos.x,
+      ey: endPos.y,
+      ez: endPos.z,
+      t0,
+      dur: durMs,
+      yaw0,
+      yaw1
+    });
   },
 
-  setIdle(record) {
+  setIdle(record, nowMs = this.getServerNowMs()) {
+    this.updateRecordPositionFromPath(record, nowMs);
+
     record.state = "idle";
     record.destination = null;
     this.releaseReservation(record);
-    record.stateEndsAt = performance.now() + this.randomIdleDurationMs(record.mobility);
+    record.path = null;
+    record.stateEndsAt = nowMs + this.randomIdleDurationMs(record.mobility);
+
+    // Freeze the bot at its current location for late joiners.
+    record.el.setAttribute("bot-path", {
+      sx: record.position.x,
+      sy: record.position.y,
+      sz: record.position.z,
+      ex: record.position.x,
+      ey: record.position.y,
+      ez: record.position.z,
+      t0: nowMs,
+      dur: 0,
+      yaw0: record.yawDeg,
+      yaw1: record.yawDeg
+    });
   },
 
   handleBotCommand(command) {
@@ -645,11 +721,11 @@ AFRAME.registerSystem("bot-runner-system", {
     if (!record) return;
 
     if (command.type === "go_to_waypoint" && command.waypoint) {
-      this.startWalking(record, String(command.waypoint));
+      this.startWalking(record, String(command.waypoint), this.getServerNowMs());
     }
   },
 
-  tick(t, dt) {
+  tick(t) {
     if (!this.enabled) return;
     if (!this.el.sceneEl.is("entered")) return;
 
@@ -684,83 +760,20 @@ AFRAME.registerSystem("bot-runner-system", {
       this.refreshFeaturedAvatarIds();
     }
 
-    const shouldPublishNetwork = t - this.lastNetworkPublishAt > NETWORK_PUBLISH_INTERVAL_MS;
-    if (shouldPublishNetwork) {
-      this.lastNetworkPublishAt = t;
-    }
+    const now = this.getServerNowMs();
 
     this.bots.forEach(record => {
-      const behavior = MOBILITY_BEHAVIOR[record.mobility] || MOBILITY_BEHAVIOR.medium;
-      const dtSeconds = Math.max(0.001, (Number(dt) || 0) / 1000);
+      // Keep the runner's idea of the bot position in sync with time-based motion.
+      this.updateRecordPositionFromPath(record, now);
 
       if (record.state === "idle") {
-        if (t >= record.stateEndsAt) {
-          this.startWalking(record);
+        if (now >= record.stateEndsAt) {
+          this.startWalking(record, null, now);
         }
-      } else if (record.state === "walk" && record.destination) {
-        this._tmpDir.copy(record.destination.position).sub(record.position);
-        const distance = this._tmpDir.length();
-
-        if (distance <= 0.08) {
-          record.position.copy(record.destination.position);
-          this.setIdle(record);
-        } else {
-          // Desired movement direction.
-          this._tmpDir.normalize();
-
-          // Continuous separation steering to avoid bots interpenetrating.
-          this._tmpSeparation.set(0, 0, 0);
-          this.bots.forEach(other => {
-            if (!other || other.id === record.id) return;
-            this._tmpNeighborDiff.copy(record.position).sub(other.position);
-            this._tmpNeighborDiff.y = 0;
-            const distSq = this._tmpNeighborDiff.lengthSq();
-            if (distSq < 1e-5 || distSq > SEPARATION_RADIUS_SQ) return;
-
-            const dist = Math.sqrt(distSq);
-            const falloff = (SEPARATION_RADIUS_M - dist) / SEPARATION_RADIUS_M; // [0..1]
-            const weight = falloff * falloff;
-            this._tmpNeighborDiff.multiplyScalar((weight / dist) * BOT_RADIUS_M);
-            this._tmpSeparation.add(this._tmpNeighborDiff);
-          });
-
-          if (this._tmpSeparation.lengthSq() > 1e-6) {
-            this._tmpSeparation.normalize();
-          } else {
-            this._tmpSeparation.set(0, 0, 0);
-          }
-
-          // Steer direction is desired direction plus weighted separation.
-          this._tmpSteer.copy(this._tmpDir).addScaledVector(this._tmpSeparation, SEPARATION_STRENGTH);
-          this._tmpSteer.y = 0;
-          if (this._tmpSteer.lengthSq() > 1e-6) {
-            this._tmpSteer.normalize();
-          } else {
-            this._tmpSteer.copy(this._tmpDir);
-          }
-
-          const step = Math.min(distance, behavior.speedMps * dtSeconds);
-          record.position.addScaledVector(this._tmpSteer, step);
-
-          // Face the movement direction. Convention: forward is -Z in three.js.
-          const desiredYaw = normalizeAngleDeg(
-            THREE.MathUtils.radToDeg(Math.atan2(-this._tmpSteer.x, -this._tmpSteer.z))
-          );
-          record.yawDeg = rotateTowardsDeg(record.yawDeg, desiredYaw, MAX_YAW_RATE_DEG_PER_S * dtSeconds);
+      } else if (record.state === "walk") {
+        if (now >= record.stateEndsAt) {
+          this.setIdle(record, now);
         }
-      }
-
-      record.el.object3D.position.copy(record.position);
-      record.el.object3D.rotation.set(0, THREE.MathUtils.degToRad(record.yawDeg), 0);
-      record.el.object3D.matrixNeedsUpdate = true;
-
-      if (shouldPublishNetwork) {
-        record.el.setAttribute("bot-transform", {
-          x: record.position.x,
-          y: record.position.y,
-          z: record.position.z,
-          yaw: record.yawDeg
-        });
       }
     });
   }

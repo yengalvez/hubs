@@ -17,6 +17,47 @@ function registerNetworkSchemas() {
     };
   };
 
+  const botTransformRequiresUpdate = (posEpsilon, yawEpsilonDeg) => {
+    const angleDeltaDeg = (a, b) => {
+      // Smallest absolute delta in degrees accounting for wrap at 360.
+      const delta = ((a - b + 540) % 360) - 180;
+      return Math.abs(delta);
+    };
+
+    return () => {
+      let prev = null;
+
+      return curr => {
+        if (!curr) return false;
+
+        const x = Number(curr.x) || 0;
+        const y = Number(curr.y) || 0;
+        const z = Number(curr.z) || 0;
+        const yaw = Number(curr.yaw) || 0;
+
+        if (prev === null) {
+          prev = { x, y, z, yaw };
+          return true;
+        }
+
+        if (
+          Math.abs(x - prev.x) > posEpsilon ||
+          Math.abs(y - prev.y) > posEpsilon ||
+          Math.abs(z - prev.z) > posEpsilon ||
+          angleDeltaDeg(yaw, prev.yaw) > yawEpsilonDeg
+        ) {
+          prev.x = x;
+          prev.y = y;
+          prev.z = z;
+          prev.yaw = yaw;
+          return true;
+        }
+
+        return false;
+      };
+    };
+  };
+
   // Note: networked template ids are semantically important. We use the template suffix as a filter
   // for allowing and authorizing messages in reticulum.
   // See `spawn_permitted?` in https://github.com/Hubs-Foundation/reticulum/blob/master/lib/ret_web/channels/hub_channel.ex
@@ -86,16 +127,8 @@ function registerNetworkSchemas() {
     template: "#remote-bot-avatar",
     components: [
       {
-        component: "position",
-        requiresNetworkUpdate: vectorRequiresUpdate(0.001)
-      },
-      {
-        component: "rotation",
-        requiresNetworkUpdate: vectorRequiresUpdate(0.5)
-      },
-      {
-        component: "scale",
-        requiresNetworkUpdate: vectorRequiresUpdate(0.001)
+        component: "bot-transform",
+        requiresNetworkUpdate: botTransformRequiresUpdate(0.005, 0.25)
       },
       "bot-info"
     ]

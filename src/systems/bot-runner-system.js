@@ -10,8 +10,34 @@ const BOT_COMMAND_TYPE = "bot_command";
 const WAYPOINT_RAYCAST_HEIGHT_M = 0.2;
 const WAYPOINT_RAYCAST_ENDPOINT_EPSILON_M = 0.1;
 
+const BOT_RADIUS_M = 0.35;
+const SEPARATION_RADIUS_M = 1.2;
+const SEPARATION_RADIUS_SQ = SEPARATION_RADIUS_M * SEPARATION_RADIUS_M;
+const SEPARATION_STRENGTH = 0.8;
+const MAX_YAW_RATE_DEG_PER_S = 720;
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function normalizeAngleDeg(deg) {
+  const n = Number(deg) || 0;
+  return ((n % 360) + 360) % 360;
+}
+
+function shortestAngleDeltaDeg(fromDeg, toDeg) {
+  // Returns the smallest signed delta in degrees in [-180, 180].
+  const from = normalizeAngleDeg(fromDeg);
+  const to = normalizeAngleDeg(toDeg);
+  return ((to - from + 540) % 360) - 180;
+}
+
+function rotateTowardsDeg(fromDeg, toDeg, maxDeltaDeg) {
+  const delta = shortestAngleDeltaDeg(fromDeg, toDeg);
+  const maxDelta = Math.max(0, Number(maxDeltaDeg) || 0);
+
+  if (Math.abs(delta) <= maxDelta) return normalizeAngleDeg(toDeg);
+  return normalizeAngleDeg(fromDeg + Math.sign(delta) * maxDelta);
 }
 
 function normalizeBotsConfig(config) {
@@ -52,6 +78,7 @@ AFRAME.registerSystem("bot-runner-system", {
     this.enabled = !!configs.feature("enable_room_bots") && qsTruthy("bot_runner");
     this.debug = this.enabled && qsTruthy("bot_debug");
     this.bots = new Map();
+    this.reservedTargets = new Map();
     this.avatarRefs = [];
     this.fullbodyAvatarRefs = [];
     this.avatarRotationOffset = Math.floor(Math.random() * 1000);
@@ -66,6 +93,9 @@ AFRAME.registerSystem("bot-runner-system", {
     this._wasConnected = false;
     this._tmpDir = new THREE.Vector3();
     this._tmpSpawnOffset = new THREE.Vector3();
+    this._tmpSeparation = new THREE.Vector3();
+    this._tmpSteer = new THREE.Vector3();
+    this._tmpNeighborDiff = new THREE.Vector3();
     this._raycaster = new THREE.Raycaster();
     this._raycastRoots = null;
     this._tmpRayOrigin = new THREE.Vector3();
@@ -358,15 +388,46 @@ AFRAME.registerSystem("bot-runner-system", {
     return true;
   },
 
-  pickPatrolPoint(excludeName, fromPosition) {
+  reserveTarget(record, targetName) {
+    if (!record || !targetName || targetName === "__wander__") return;
+
+    // Release previous reservation (if any).
+    this.releaseReservation(record);
+
+    record.reservedTargetName = targetName;
+    this.reservedTargets.set(targetName, record.id);
+  },
+
+  releaseReservation(record) {
+    if (!record) return;
+    const name = record.reservedTargetName;
+    if (!name) return;
+    if (this.reservedTargets.get(name) === record.id) {
+      this.reservedTargets.delete(name);
+    }
+    record.reservedTargetName = null;
+  },
+
+  pickPatrolPoint(botId, excludeName, fromPosition) {
     if (!this.patrolPoints.length) return null;
+
+    const isReservedByOther = point => {
+      const owner = this.reservedTargets.get(point.name);
+      return owner && owner !== botId;
+    };
 
     const candidates = this.patrolPoints.filter(point => {
       if (point.name === excludeName) return false;
+      if (isReservedByOther(point)) return false;
       if (!fromPosition) return true;
       return point.position.distanceToSquared(fromPosition) > 0.04;
     });
-    const source = candidates.length ? candidates : this.patrolPoints;
+    const source = candidates.length
+      ? candidates
+      : // If every waypoint is reserved, allow selecting reserved ones rather than getting stuck.
+        this.patrolPoints.filter(point => point.name !== excludeName);
+
+    if (!source.length) return null;
 
     if (!fromPosition) {
       return source[Math.floor(Math.random() * source.length)];
@@ -398,14 +459,14 @@ AFRAME.registerSystem("bot-runner-system", {
     const startPoint = this.pickSpawnPoint(botId);
     const startPos = startPoint ? this.positionForSpawnPoint(startPoint, botId) : new THREE.Vector3();
     const avatarId = this.pickAvatarId(botId);
+    const startYaw = Math.random() * 360;
 
     const el = document.createElement("a-entity");
     el.setAttribute("networked", "template: #remote-bot-avatar; attachTemplateToLocal: false;");
     // Re-send periodic isFirstSync messages to mitigate missed instantiation messages on late-joining clients.
     // This is the same technique used for the local avatar rig (`periodic-full-syncs`).
     el.setAttribute("periodic-full-syncs", "");
-    el.setAttribute("position", startPos);
-    el.setAttribute("rotation", { x: 0, y: Math.random() * 360, z: 0 });
+    el.setAttribute("bot-transform", { x: startPos.x, y: startPos.y, z: startPos.z, yaw: startYaw });
     el.setAttribute("bot-info", {
       botId,
       avatarId,
@@ -446,8 +507,9 @@ AFRAME.registerSystem("bot-runner-system", {
       state: "idle",
       position: startPos,
       homePosition: startPos.clone(),
-      yawDeg: Number(el.getAttribute("rotation")?.y || 0),
+      yawDeg: normalizeAngleDeg(startYaw),
       destination: null,
+      reservedTargetName: null,
       stateEndsAt: performance.now() + idleDuration,
       mobility: config.mobility
     });
@@ -456,6 +518,8 @@ AFRAME.registerSystem("bot-runner-system", {
   removeBot(botId) {
     const record = this.bots.get(botId);
     if (!record) return;
+
+    this.releaseReservation(record);
 
     if (record.el && record.el.parentNode) {
       record.el.parentNode.removeChild(record.el);
@@ -536,7 +600,7 @@ AFRAME.registerSystem("bot-runner-system", {
     }
 
     if (!target) {
-      target = this.pickPatrolPoint(record.destination?.name, record.position);
+      target = this.pickPatrolPoint(record.id, record.destination?.name, record.position);
     }
 
     if (!target) {
@@ -546,7 +610,7 @@ AFRAME.registerSystem("bot-runner-system", {
       };
     } else if (target.position.distanceTo(record.position) <= 0.08) {
       // If we accidentally picked a point right on top of us, try another patrol point before falling back to wander.
-      const alt = this.pickPatrolPoint(target.name, record.position);
+      const alt = this.pickPatrolPoint(record.id, target.name, record.position);
       target = alt || {
         name: "__wander__",
         position: this.randomNearbyDestination(record)
@@ -554,6 +618,11 @@ AFRAME.registerSystem("bot-runner-system", {
     }
 
     record.state = "walk";
+    if (target.name && target.name !== "__wander__") {
+      this.reserveTarget(record, target.name);
+    } else {
+      this.releaseReservation(record);
+    }
     const destination = this.separateNearbyPosition(target.position, record.id, 0.45);
     record.destination = {
       name: target.name,
@@ -564,6 +633,7 @@ AFRAME.registerSystem("bot-runner-system", {
   setIdle(record) {
     record.state = "idle";
     record.destination = null;
+    this.releaseReservation(record);
     record.stateEndsAt = performance.now() + this.randomIdleDurationMs(record.mobility);
   },
 
@@ -621,6 +691,7 @@ AFRAME.registerSystem("bot-runner-system", {
 
     this.bots.forEach(record => {
       const behavior = MOBILITY_BEHAVIOR[record.mobility] || MOBILITY_BEHAVIOR.medium;
+      const dtSeconds = Math.max(0.001, (Number(dt) || 0) / 1000);
 
       if (record.state === "idle") {
         if (t >= record.stateEndsAt) {
@@ -634,10 +705,48 @@ AFRAME.registerSystem("bot-runner-system", {
           record.position.copy(record.destination.position);
           this.setIdle(record);
         } else {
-          const step = Math.min(distance, (behavior.speedMps * dt) / 1000);
-          this._tmpDir.normalize().multiplyScalar(step);
-          record.position.add(this._tmpDir);
-          record.yawDeg = THREE.MathUtils.radToDeg(Math.atan2(this._tmpDir.x, this._tmpDir.z));
+          // Desired movement direction.
+          this._tmpDir.normalize();
+
+          // Continuous separation steering to avoid bots interpenetrating.
+          this._tmpSeparation.set(0, 0, 0);
+          this.bots.forEach(other => {
+            if (!other || other.id === record.id) return;
+            this._tmpNeighborDiff.copy(record.position).sub(other.position);
+            this._tmpNeighborDiff.y = 0;
+            const distSq = this._tmpNeighborDiff.lengthSq();
+            if (distSq < 1e-5 || distSq > SEPARATION_RADIUS_SQ) return;
+
+            const dist = Math.sqrt(distSq);
+            const falloff = (SEPARATION_RADIUS_M - dist) / SEPARATION_RADIUS_M; // [0..1]
+            const weight = falloff * falloff;
+            this._tmpNeighborDiff.multiplyScalar((weight / dist) * BOT_RADIUS_M);
+            this._tmpSeparation.add(this._tmpNeighborDiff);
+          });
+
+          if (this._tmpSeparation.lengthSq() > 1e-6) {
+            this._tmpSeparation.normalize();
+          } else {
+            this._tmpSeparation.set(0, 0, 0);
+          }
+
+          // Steer direction is desired direction plus weighted separation.
+          this._tmpSteer.copy(this._tmpDir).addScaledVector(this._tmpSeparation, SEPARATION_STRENGTH);
+          this._tmpSteer.y = 0;
+          if (this._tmpSteer.lengthSq() > 1e-6) {
+            this._tmpSteer.normalize();
+          } else {
+            this._tmpSteer.copy(this._tmpDir);
+          }
+
+          const step = Math.min(distance, behavior.speedMps * dtSeconds);
+          record.position.addScaledVector(this._tmpSteer, step);
+
+          // Face the movement direction. Convention: forward is -Z in three.js.
+          const desiredYaw = normalizeAngleDeg(
+            THREE.MathUtils.radToDeg(Math.atan2(-this._tmpSteer.x, -this._tmpSteer.z))
+          );
+          record.yawDeg = rotateTowardsDeg(record.yawDeg, desiredYaw, MAX_YAW_RATE_DEG_PER_S * dtSeconds);
         }
       }
 
@@ -646,8 +755,12 @@ AFRAME.registerSystem("bot-runner-system", {
       record.el.object3D.matrixNeedsUpdate = true;
 
       if (shouldPublishNetwork) {
-        record.el.setAttribute("position", record.position);
-        record.el.setAttribute("rotation", { x: 0, y: record.yawDeg, z: 0 });
+        record.el.setAttribute("bot-transform", {
+          x: record.position.x,
+          y: record.position.y,
+          z: record.position.z,
+          yaw: record.yawDeg
+        });
       }
     });
   }

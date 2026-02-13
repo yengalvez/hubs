@@ -29,9 +29,52 @@ AFRAME.registerComponent("bot-info", {
     this._tmpLocalQuat = new Quaternion();
     this._tmpWorldDiff = new Vector3();
     this._tmpLocalDiff = new Vector3();
+    this._behaviorReordered = false;
+    this._behaviorReorderScheduled = false;
+    this._onComponentInitialized = this._onComponentInitialized.bind(this);
 
     this.el.classList.add("hubs-room-bot");
     this.applyMetadata();
+  },
+
+  play() {
+    this.el.addEventListener("componentinitialized", this._onComponentInitialized);
+    this.tryReorderBehavior();
+  },
+
+  pause() {
+    this.el.removeEventListener("componentinitialized", this._onComponentInitialized);
+  },
+
+  _onComponentInitialized(e) {
+    if (!e || !e.detail || e.detail.name !== "networked") return;
+    this.tryReorderBehavior();
+  },
+
+  tryReorderBehavior() {
+    if (this._behaviorReordered || this._behaviorReorderScheduled) return;
+    const sceneEl = this.el && this.el.sceneEl;
+    if (!sceneEl || typeof sceneEl.removeBehavior !== "function" || typeof sceneEl.addBehavior !== "function") return;
+
+    const net = this.el.components && this.el.components.networked;
+    if (!net || !net.initialized) return;
+
+    // Defer the mutation so we don't modify the behavior list during a tick iteration.
+    this._behaviorReorderScheduled = true;
+    setTimeout(() => {
+      this._behaviorReorderScheduled = false;
+      if (this._behaviorReordered) return;
+      const sceneEl2 = this.el && this.el.sceneEl;
+      if (!sceneEl2 || typeof sceneEl2.removeBehavior !== "function" || typeof sceneEl2.addBehavior !== "function")
+        return;
+      try {
+        sceneEl2.removeBehavior(this);
+        sceneEl2.addBehavior(this);
+        this._behaviorReordered = true;
+      } catch {
+        // Best-effort; if this fails we still function, just less smoothly.
+      }
+    }, 0);
   },
 
   update(oldData) {
@@ -57,6 +100,8 @@ AFRAME.registerComponent("bot-info", {
       this.resetSmoothingOffsets();
       return;
     }
+
+    this.tryReorderBehavior();
 
     // Note: In Hubs, the A-Frame `position` component's data is a *reference* to `object3D.position`.
     // Reading `getAttribute("position")` here would therefore read our own smoothed value and create feedback.

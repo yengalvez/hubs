@@ -130,8 +130,8 @@ function getBuildVersionInfo() {
   if (typeof document !== "undefined") {
     // Prefer the main app bundle hash, not ancillary bundles like webxr-polyfill.
     const preferred = [
-      /assets\/js\/frontend-([0-9a-f]{8,})\.js/i,
       /assets\/js\/hub-([0-9a-f]{8,})\.js/i,
+      /assets\/js\/frontend-([0-9a-f]{8,})\.js/i,
       /assets\/js\/engine-([0-9a-f]{8,})\.js/i
     ];
 
@@ -1027,7 +1027,10 @@ class UIRoot extends Component {
       const botEl = botEls[i];
       if (!botEl.object3D) continue;
 
-      botEl.object3D.getWorldPosition(this._botTmpBotPos);
+      // Bot visual smoothing happens on the `.model` child; use it if present so proximity feels stable.
+      const smoothEl = botEl.querySelector ? botEl.querySelector(".model") : null;
+      const targetObj3D = smoothEl && smoothEl.object3D ? smoothEl.object3D : botEl.object3D;
+      targetObj3D.getWorldPosition(this._botTmpBotPos);
       const distSq = this._botTmpRigPos.distanceToSquared(this._botTmpBotPos);
 
       if (!nearest || distSq < nearest.distSq) {

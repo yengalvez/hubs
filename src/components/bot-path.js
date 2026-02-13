@@ -1,8 +1,8 @@
 const { Vector3, Euler, Quaternion, MathUtils } = THREE;
 
 const TURN_DURATION_MS = 300;
-const START_CORRECTION_MIN_M = 0.25;
-const START_CORRECTION_MAX_M = 4.0;
+const START_CORRECTION_MIN_M = 0.05;
+const START_CORRECTION_MAX_M = 20.0;
 
 function getBotYawOffsetDeg(el) {
   const raw = el && el.dataset ? el.dataset.botYawOffsetDeg : null;
@@ -138,28 +138,25 @@ AFRAME.registerComponent("bot-path", {
 
       if (dur > 0) {
         const startX = Number(d.sx) || 0;
-        const startY = Number(d.sy) || 0;
         const startZ = Number(d.sz) || 0;
 
         const cur = this.el.object3D.position;
         const dx = cur.x - startX;
-        const dy = cur.y - startY;
         const dz = cur.z - startZ;
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // Corrections should be based on horizontal motion only. Y can differ slightly due to floor snapping.
+        const dist = Math.sqrt(dx * dx + dz * dz);
 
         if (dist >= START_CORRECTION_MIN_M && dist <= START_CORRECTION_MAX_M) {
           const endX = Number(d.ex) || 0;
-          const endY = Number(d.ey) || 0;
           const endZ = Number(d.ez) || 0;
 
           const origDx = endX - startX;
-          const origDy = endY - startY;
           const origDz = endZ - startZ;
-          const origDist = Math.sqrt(origDx * origDx + origDy * origDy + origDz * origDz);
+          const origDist = Math.sqrt(origDx * origDx + origDz * origDz);
+
           const newDx = endX - cur.x;
-          const newDy = endY - cur.y;
           const newDz = endZ - cur.z;
-          const newDist = Math.sqrt(newDx * newDx + newDy * newDy + newDz * newDz);
+          const newDist = Math.sqrt(newDx * newDx + newDz * newDz);
 
           const speedMPerMs = origDist > 1e-4 ? origDist / dur : 0;
           const newDur = speedMPerMs > 1e-6 ? Math.max(1, Math.round(newDist / speedMPerMs)) : dur;

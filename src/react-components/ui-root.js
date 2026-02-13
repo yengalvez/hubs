@@ -128,7 +128,26 @@ function getBuildVersionInfo() {
   }
 
   if (typeof document !== "undefined") {
+    // Prefer the main app bundle hash, not ancillary bundles like webxr-polyfill.
+    const preferred = [
+      /assets\/js\/frontend-([0-9a-f]{8,})\.js/i,
+      /assets\/js\/hub-([0-9a-f]{8,})\.js/i,
+      /assets\/js\/engine-([0-9a-f]{8,})\.js/i
+    ];
+
     const scripts = Array.from(document.querySelectorAll("script[src]"));
+    for (const re of preferred) {
+      for (const script of scripts) {
+        const src = script.getAttribute("src") || "";
+        const match = src.match(re);
+        if (match) {
+          const hash = match[1];
+          return { short: hash.slice(0, 8), full: hash };
+        }
+      }
+    }
+
+    // Fallback: first hashed JS bundle on the page.
     for (const script of scripts) {
       const src = script.getAttribute("src") || "";
       const match = src.match(/assets\/js\/[^/]+-([0-9a-f]{8,})\.js/i);

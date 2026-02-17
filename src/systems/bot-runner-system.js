@@ -10,8 +10,9 @@ const WAYPOINT_RAYCAST_HEIGHT_M = 0.2;
 const WAYPOINT_RAYCAST_ENDPOINT_EPSILON_M = 0.1;
 
 // Path movement is time-based so it stays smooth even if the headless runner hitches.
-const PATH_START_DELAY_MS = 150;
+const PATH_START_DELAY_MS = 450;
 const MIN_WALK_DURATION_MS = 600;
+const OCCUPANT_SYNC_INTERVAL_MS = 500;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -82,6 +83,8 @@ AFRAME.registerSystem("bot-runner-system", {
     this._tmpRayOrigin = new THREE.Vector3();
     this._tmpRayTarget = new THREE.Vector3();
     this._tmpRayDir = new THREE.Vector3();
+    this._knownOccupants = new Set();
+    this._lastOccupantScanAt = 0;
 
     this.onHubUpdated = this.onHubUpdated.bind(this);
     this.onMessage = this.onMessage.bind(this);
@@ -453,9 +456,6 @@ AFRAME.registerSystem("bot-runner-system", {
 
     const el = document.createElement("a-entity");
     el.setAttribute("networked", "template: #remote-bot-avatar; attachTemplateToLocal: false;");
-    // Re-send periodic isFirstSync messages to mitigate missed instantiation messages on late-joining clients.
-    // This is the same technique used for the local avatar rig (`periodic-full-syncs`).
-    el.setAttribute("periodic-full-syncs", "");
     el.setAttribute("bot-path", {
       sx: startPos.x,
       sy: startPos.y,
@@ -747,7 +747,33 @@ AFRAME.registerSystem("bot-runner-system", {
     if (!this._wasConnected) {
       this._wasConnected = true;
       this.clearBots();
+      this._knownOccupants.clear();
+      this._lastOccupantScanAt = 0;
       this.lastConfigRefreshAt = 0;
+    }
+
+    // Directed first-syncs to mitigate missed instantiation messages on late joiners without resending
+    // full sync broadcasts periodically (which can cause visible snapping at segment boundaries).
+    if (t - this._lastOccupantScanAt >= OCCUPANT_SYNC_INTERVAL_MS) {
+      this._lastOccupantScanAt = t;
+
+      const adapter = window.NAF?.connection?.adapter;
+      const occupants = adapter && adapter.occupants ? Object.keys(adapter.occupants) : [];
+      for (let i = 0; i < occupants.length; i++) {
+        const clientId = occupants[i];
+        if (!clientId || this._knownOccupants.has(clientId)) continue;
+        this._knownOccupants.add(clientId);
+
+        this.bots.forEach(record => {
+          const net = record?.el?.components?.networked;
+          if (!net || typeof net.syncAll !== "function") return;
+          try {
+            net.syncAll(clientId, true);
+          } catch {
+            // Best-effort: the next scan will retry if needed.
+          }
+        });
+      }
     }
 
     if (t - this.lastConfigRefreshAt > CONFIG_REFRESH_INTERVAL_MS) {

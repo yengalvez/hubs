@@ -74,6 +74,13 @@ AFRAME.registerComponent("bot-info", {
     this._onModelLoaded = () => {
       if (loadVersion !== this._avatarLoadVersion) return;
       this.updateYawOffsetFromModel(modelEl);
+
+      // Hide the placeholder once the real model is loaded.
+      const placeholder = this.el.querySelector(".bot-placeholder");
+      if (placeholder) {
+        placeholder.object3D.visible = false;
+        placeholder.setAttribute("visible", false);
+      }
     };
     modelEl.addEventListener("model-loaded", this._onModelLoaded, { once: true });
 

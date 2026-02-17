@@ -5,6 +5,7 @@ import { SignInMessages } from "./react-components/auth/SignInModal";
 import { createNetworkedEntity } from "./utils/create-networked-entity";
 
 const isBotMode = qsTruthy("bot");
+const isBotRunnerMode = qsTruthy("bot_runner");
 const isMobile = AFRAME.utils.device.isMobile();
 const forceEnableTouchscreen = hackyMobileSafariTest();
 const isThisMobileVR = AFRAME.utils.device.isMobileVR();
@@ -86,6 +87,14 @@ export default class SceneEntryManager {
     } else {
       const waypointSystem = this.scene.systems["hubs-systems"].waypointSystem;
       waypointSystem.moveToSpawnPoint();
+    }
+
+    // Technical runner mode: connect + enter presence, but do not spawn a visible avatar rig.
+    // The runner exists solely to authoritatively create/update bot entities.
+    if (isBotMode && isBotRunnerMode) {
+      this.scene.addState("entered");
+      this.hubChannel.sendEnteredEvent();
+      return;
     }
 
     if (isMobile || forceEnableTouchscreen || qsTruthy("force_enable_touchscreen")) {

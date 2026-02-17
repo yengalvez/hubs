@@ -1,13 +1,29 @@
 const { Vector3, Euler, Quaternion, MathUtils } = THREE;
 
 const TURN_DURATION_MS = 300;
-const START_CORRECTION_MIN_M = 0.05;
-const START_CORRECTION_MAX_M = 20.0;
+const BOT_RENDER_DELAY_MS = 250;
+const SERVER_TIME_SMOOTHING = 0.1;
 
 function getBotYawOffsetDeg(el) {
   const raw = el && el.dataset ? el.dataset.botYawOffsetDeg : null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
+}
+
+function snapshotSegment(d) {
+  if (!d) return null;
+  return {
+    sx: Number(d.sx) || 0,
+    sy: Number(d.sy) || 0,
+    sz: Number(d.sz) || 0,
+    ex: Number(d.ex) || 0,
+    ey: Number(d.ey) || 0,
+    ez: Number(d.ez) || 0,
+    t0: Number(d.t0) || 0,
+    dur: Math.max(0, Number(d.dur) || 0),
+    yaw0: Number(d.yaw0) || 0,
+    yaw1: Number(d.yaw1) || 0
+  };
 }
 
 function normalizeAngleDeg(deg) {
@@ -47,8 +63,12 @@ AFRAME.registerComponent("bot-path", {
     this._tmpPos = new Vector3();
     this._tmpEuler = new Euler(0, 0, 0, "YXZ");
     this._tmpQuat = new Quaternion();
+    this._active = null;
+    this._pending = null;
     this._hasApplied = false;
-    this._override = null;
+    this._hasShown = false;
+    this._smoothedOffsetMs = 0;
+    this._lastNowMs = 0;
   },
 
   isMine() {
@@ -56,7 +76,7 @@ AFRAME.registerComponent("bot-path", {
     return !!(net && net.initialized && net.isMine());
   },
 
-  getNowMs() {
+  getRawServerTimeMs() {
     const conn = window.NAF && window.NAF.connection;
     if (conn && typeof conn.getServerTime === "function") {
       return conn.getServerTime();
@@ -64,33 +84,61 @@ AFRAME.registerComponent("bot-path", {
     return performance.now();
   },
 
+  getNowMs() {
+    const perfNow = performance.now();
+    const rawNow = this.getRawServerTimeMs();
+
+    const offset = rawNow - perfNow;
+    if (!Number.isFinite(this._smoothedOffsetMs)) {
+      this._smoothedOffsetMs = Number.isFinite(offset) ? offset : 0;
+    } else if (Number.isFinite(offset)) {
+      this._smoothedOffsetMs += (offset - this._smoothedOffsetMs) * SERVER_TIME_SMOOTHING;
+    }
+
+    let now = perfNow + this._smoothedOffsetMs;
+    if (!Number.isFinite(now)) now = rawNow;
+
+    // Ensure time never goes backwards, even if the server time offset is corrected.
+    if (now < this._lastNowMs) now = this._lastNowMs;
+    this._lastNowMs = now;
+
+    return now;
+  },
+
   applyTransform() {
     if (!this.el.object3D) return;
 
     const now = this.getNowMs();
-    const d = this.data;
+    const renderNow = now - BOT_RENDER_DELAY_MS;
 
-    const o = this._override;
+    // Promote pending segment only once we're ready to start rendering it.
+    if (this._pending && renderNow >= this._pending.t0) {
+      this._active = this._pending;
+      this._pending = null;
+    }
 
-    const sx = o ? o.sx : Number(d.sx) || 0;
-    const sy = o ? o.sy : Number(d.sy) || 0;
-    const sz = o ? o.sz : Number(d.sz) || 0;
-    const ex = Number(d.ex) || 0;
-    const ey = Number(d.ey) || 0;
-    const ez = Number(d.ez) || 0;
+    const seg = this._active;
+    if (!seg) return;
+
+    const sx = seg.sx;
+    const sy = seg.sy;
+    const sz = seg.sz;
+    const ex = seg.ex;
+    const ey = seg.ey;
+    const ez = seg.ez;
 
     this._tmpStart.set(sx, sy, sz);
     this._tmpEnd.set(ex, ey, ez);
 
-    const t0 = o ? o.t0 : Number(d.t0) || 0;
-    const dur = Math.max(0, o ? o.dur : Number(d.dur) || 0);
+    const t0 = seg.t0;
+    const dur = seg.dur;
 
     let alpha = 1;
     if (dur > 0) {
-      if (now <= t0) {
+      if (renderNow <= t0) {
         alpha = 0;
       } else {
-        alpha = (now - t0) / dur;
+        alpha = (renderNow - t0) / dur;
       }
       alpha = MathUtils.clamp(alpha, 0, 1);
     }
@@ -98,15 +146,14 @@ AFRAME.registerComponent("bot-path", {
     this._tmpPos.lerpVectors(this._tmpStart, this._tmpEnd, alpha);
 
     const yawOffset = getBotYawOffsetDeg(this.el);
-    const yaw0Raw = o ? o.yaw0 : Number(d.yaw0) || 0;
-    const yaw0 = normalizeAngleDeg(yaw0Raw - yawOffset);
-    const yaw1 = normalizeAngleDeg((Number(d.yaw1) || 0) - yawOffset);
+    const yaw0 = normalizeAngleDeg((seg.yaw0 || 0) - yawOffset);
+    const yaw1 = normalizeAngleDeg((seg.yaw1 || 0) - yawOffset);
     let yawDeg = yaw1;
     if (dur > 0) {
-      if (now <= t0) {
+      if (renderNow <= t0) {
         yawDeg = yaw0;
       } else {
-        const turnT = MathUtils.clamp((now - t0) / TURN_DURATION_MS, 0, 1);
+        const turnT = MathUtils.clamp((renderNow - t0) / TURN_DURATION_MS, 0, 1);
         yawDeg = lerpAngleDeg(yaw0, yaw1, turnT);
       }
     } else {
@@ -119,63 +166,34 @@ AFRAME.registerComponent("bot-path", {
     this.el.object3D.position.copy(this._tmpPos);
     this.el.object3D.quaternion.copy(this._tmpQuat);
     this.el.object3D.matrixNeedsUpdate = true;
+
+    if (!this._hasShown) {
+      // Keep the bot hidden until we've applied its first transform so there is no flash at the origin.
+      this._hasShown = true;
+      this.el.object3D.visible = true;
+      this.el.setAttribute("visible", true);
+    }
   },
 
   update() {
     // Runner is authoritative; don't fight its local transforms. Remote clients render via this component.
     if (this.isMine()) return;
 
-    this._override = null;
+    const seg = snapshotSegment(this.data);
+    if (!seg) return;
 
-    // If we receive a new movement segment but our current rendered position is far from the segment start,
-    // it means we missed/delayed an update. Snap-correct by treating the segment start as "where we are now"
-    // so the next walk begins from the visible location instead of jumping.
-    // Important: only do this after we've rendered at least one frame of a previous segment. Otherwise,
-    // newly-instantiated bots start at the origin before their first path is applied.
-    if (this.el.object3D && this._hasApplied) {
-      const d = this.data;
-      const dur = Math.max(0, Number(d.dur) || 0);
-
-      if (dur > 0) {
-        const startX = Number(d.sx) || 0;
-        const startZ = Number(d.sz) || 0;
-
-        const cur = this.el.object3D.position;
-        const dx = cur.x - startX;
-        const dz = cur.z - startZ;
-        // Corrections should be based on horizontal motion only. Y can differ slightly due to floor snapping.
-        const dist = Math.sqrt(dx * dx + dz * dz);
-
-        if (dist >= START_CORRECTION_MIN_M && dist <= START_CORRECTION_MAX_M) {
-          const endX = Number(d.ex) || 0;
-          const endZ = Number(d.ez) || 0;
-
-          const origDx = endX - startX;
-          const origDz = endZ - startZ;
-          const origDist = Math.sqrt(origDx * origDx + origDz * origDz);
-
-          const newDx = endX - cur.x;
-          const newDz = endZ - cur.z;
-          const newDist = Math.sqrt(newDx * newDx + newDz * newDz);
-
-          const speedMPerMs = origDist > 1e-4 ? origDist / dur : 0;
-          const newDur = speedMPerMs > 1e-6 ? Math.max(1, Math.round(newDist / speedMPerMs)) : dur;
-
-          const now = this.getNowMs();
-
-          this._tmpEuler.setFromQuaternion(this.el.object3D.quaternion);
-          const yaw0 = normalizeAngleDeg(MathUtils.radToDeg(this._tmpEuler.y));
-
-          this._override = {
-            sx: cur.x,
-            sy: cur.y,
-            sz: cur.z,
-            t0: now,
-            dur: newDur,
-            yaw0
-          };
-        }
-      }
+    // The server sends one segment at a time. Keep the previous segment active and stage the new one
+    // as "pending" until it's time to render it. Combined with BOT_RENDER_DELAY_MS, this prevents
+    // visible snapping at segment boundaries even if there is jitter in update arrival.
+    if (!this._active) {
+      this._active = seg;
+      this._pending = null;
+    } else if (seg.t0 >= this._active.t0) {
+      this._pending = seg;
+    } else {
+      // If we somehow receive an older segment, just take it as authoritative.
+      this._active = seg;
+      this._pending = null;
     }
 
     // Apply immediately to avoid a one-frame flash at the origin on instantiation.

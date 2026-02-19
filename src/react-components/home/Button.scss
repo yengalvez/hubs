@@ -1,8 +1,6 @@
-
 @use "../styles/theme.scss";
 
 :local(.primary-button) {
-
 }
 
 :local(.cta-button) {
@@ -29,5 +27,5 @@
 }
 
 :local(.thin) {
-  padding: 0 4px
+  padding: 0 4px;
 }

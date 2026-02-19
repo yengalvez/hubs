@@ -15,7 +15,7 @@
 
   &:focus-within :local(.track) {
     border-color: theme.$active-color;
-    box-shadow: 0 0 0 2px theme.$active-color;
+    box-shadow: 0 0 0 2px rgba(79, 207, 255, 0.4);
   }
 }
 
@@ -38,14 +38,18 @@
   margin-top: 8px;
   font-size: theme.$font-size-xs;
   font-weight: theme.$font-weight-regular;
+  color: theme.$text3-color;
 }
 
 :local(.track) {
   position: relative;
-  width: 44px;
+  width: 46px;
   height: 24px;
   border: 1px solid theme.$radio-border-color;
-  border-radius: 44px; 
+  border-radius: 44px;
+  background: rgba(14, 24, 44, 0.8);
+  -webkit-backdrop-filter: blur(var(--mv-blur-sm));
+  backdrop-filter: blur(var(--mv-blur-sm));
 }
 
 :local(.button) {
@@ -55,12 +59,16 @@
   width: 20px;
   height: 20px;
   border-radius: 20px;
-  background-color: theme.$toggle-button-color;
+  background: linear-gradient(120deg, #8ac3ff 0%, #5f93ff 100%);
+  transition: left 0.15s ease, right 0.15s ease, background-color 0.15s ease;
+}
+
+:local(.toggle-input) input:checked + :local(.track) {
+  background: rgba(19, 43, 82, 0.9);
 }
 
 :local(.toggle-input) input:checked + :local(.track) :local(.button) {
   left: auto;
   right: 1px;
-  background-color: theme.$active-color;
+  background: linear-gradient(120deg, #26d1ff 0%, #3f7bff 100%);
 }
-

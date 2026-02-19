@@ -3,9 +3,10 @@
 :local(.section-title) {
   font-size: theme.$font-size-sm;
   font-weight: theme.$font-weight-bold;
-  color: theme.$text2-color;
-  margin-bottom: 16px;
+  color: theme.$text3-color;
+  margin-bottom: 12px;
   margin-top: 16px;
+  letter-spacing: 0.03em;
 
   &:first-child {
     margin-top: 0;
@@ -15,12 +16,14 @@
 :local(.scene-screenshot-container) {
   position: relative;
   width: 100%;
-  border-radius: 12px;
+  border-radius: var(--mv-radius-md);
+  border: 1px solid theme.$border1-color;
+  overflow: hidden;
 }
 
 :local(.scene-screenshot-image) {
   background-color: theme.$tile-bg-color;
-  border-radius: 12px;
+  border-radius: var(--mv-radius-md);
 }
 
 :local(.scene-info) {
@@ -28,7 +31,7 @@
 }
 
 :local(.scene-name) {
-  color: theme.$text2-color;
+  color: theme.$text1-color;
 }
 
 :local(.scene-creator) {

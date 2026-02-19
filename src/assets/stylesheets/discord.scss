@@ -8,13 +8,13 @@ $mobile-breakpoint-width: 450px;
 
 body {
   @extend %default-font;
-  background: theme.$discord-bg-color;
-  color: theme.$discord-text1-color;
+  background: radial-gradient(140% 120% at 0% 0%, #1e3358 0%, #0b1324 40%, #050812 100%);
+  color: theme.$text1-color;
   margin: 0;
 }
 
 :local(.bg) {
-  background: theme.$discord-bg-color;
+  background: radial-gradient(140% 120% at 0% 0%, #1e3358 0%, #0b1324 40%, #050812 100%);
   top: 0;
   left: 0;
   position: absolute;
@@ -40,21 +40,25 @@ body {
 :local(.header) {
   font-size: 1.1em;
   font-weight: bold;
-  color: theme.$discord-text1-color;
+  color: theme.$text1-color;
 }
 
 :local(.header-links) {
   display: flex;
-  margin: 24px 12px 0px 12px;
+  margin: 24px 12px 0;
 
-  @media(max-width: $mobile-breakpoint-width) {
+  @media (max-width: $mobile-breakpoint-width) {
     justify-content: space-between;
   }
 
   a {
-    color: theme.$discord-text1-color;
+    color: #b8e8ff;
     text-decoration: none;
-    margin: 0px 18px;
+    margin: 0 18px;
+
+    &:hover {
+      color: #d8f6ff;
+    }
   }
 }
 
@@ -65,11 +69,11 @@ body {
   justify-content: center;
   align-items: center;
 
-  @media(max-width: $breakpoint) {
+  @media (max-width: $breakpoint) {
     flex-direction: column;
   }
 
-  @media(max-width: $narrow-breakpoint) {
+  @media (max-width: $narrow-breakpoint) {
     width: 100%;
   }
 }
@@ -81,7 +85,7 @@ body {
   justify-content: center;
   width: 30vw;
 
-  @media(max-width: $narrow-breakpoint) {
+  @media (max-width: $narrow-breakpoint) {
     width: 320px;
 
     img {
@@ -100,11 +104,11 @@ body {
   margin-left: 12px;
   margin-right: 12px;
 
-  @media(max-width: $mobile-breakpoint-width) {
+  @media (max-width: $mobile-breakpoint-width) {
     font-size: 1.3em;
   }
 
-  @media(max-width: $narrow-breakpoint) {
+  @media (max-width: $narrow-breakpoint) {
     text-align: center;
     white-space: normal;
   }
@@ -119,11 +123,11 @@ body {
   margin-left: 12px;
   margin-right: 12px;
 
-  @media(max-width: $mobile-breakpoint-width) {
+  @media (max-width: $mobile-breakpoint-width) {
     font-size: 1.3em;
   }
 
-  @media(max-width: $narrow-breakpoint) {
+  @media (max-width: $narrow-breakpoint) {
     text-align: center;
   }
 }
@@ -136,9 +140,15 @@ body {
   justify-content: center;
   height: 100%;
   margin: 0 36px;
+  padding: 22px;
+  border-radius: var(--mv-radius-lg);
+  border: 1px solid theme.$border1-color;
+  background: rgba(11, 20, 38, 0.7);
+  box-shadow: var(--mv-shadow-2);
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
 
-  @media(max-width: $breakpoint) {
-    text-shadow: 0px 0px 4px rgba(0, 0, 0, 1.0);
+  @media (max-width: $breakpoint) {
     order: 2;
     width: 100%;
     margin: 32px 0;
@@ -154,16 +164,17 @@ body {
   margin: 0 32px;
   flex: 1;
   z-index: -1;
-  border-radius: 8px;
+  border-radius: var(--mv-radius-md);
 
   video {
     width: 90%;
     border-style: solid;
-    border-width: thick;
-    border-radius: 5px;
+    border-width: 1px;
+    border-color: theme.$border1-color;
+    border-radius: var(--mv-radius-sm);
   }
 
-  @media(max-width: $breakpoint) {
+  @media (max-width: $breakpoint) {
     display: none;
   }
 
@@ -173,7 +184,7 @@ body {
     right: 15%;
     width: 75%;
     text-align: center;
-    color: theme.$discord-text2-color;
+    color: theme.$text2-color;
   }
 }
 
@@ -194,22 +205,23 @@ body {
   @media (max-width: 375px) {
     width: 300px;
   }
-  
-  height: 64px;
-  border-radius: 4px;
 
-  background-color: theme.$discord--primary-color;
+  height: 64px;
+  border-radius: var(--mv-radius-md);
+  border: 1px solid rgba(130, 201, 255, 0.45);
+  background: linear-gradient(130deg, var(--mv-accent-1) 0%, var(--mv-accent-2) 100%);
   margin-top: 64px;
   display: flex;
   flex-direction: column;
   font-size: 1.2em;
 }
 
-:local(.play-button), :local(.close-video) {
+:local(.play-button),
+:local(.close-video) {
   @extend %action-button;
-  background-color: theme.$discord-text4-color;
+  background-color: rgba(19, 33, 59, 0.95);
   margin: auto;
-  padding: 0px 82px;
+  padding: 0 82px;
 }
 
 :local(.tutorial-buttons) {
@@ -225,7 +237,7 @@ body {
 }
 
 :local(.browse-versions) {
-  color: theme.$discord-text3-color;
+  color: theme.$text2-color;
   margin-top: 12px;
   display: block;
   text-align: center;
@@ -236,7 +248,7 @@ body {
   text-align: center;
 
   a {
-    color: theme.$discord-text3-color;
+    color: theme.$text2-color;
   }
 }
 
@@ -283,5 +295,5 @@ body {
   position: absolute;
   bottom: -40px;
   right: 84px;
-  color: theme.$discord-text4-color;
+  color: theme.$text3-color;
 }

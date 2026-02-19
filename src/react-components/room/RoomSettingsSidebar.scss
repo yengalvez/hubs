@@ -1,6 +1,7 @@
 @use "../styles/theme.scss";
 
-:local(.room-permissions), :local(.permissions-group) {
+:local(.room-permissions),
+:local(.permissions-group) {
   margin-left: 20px;
 
   & > * {
@@ -8,7 +9,7 @@
   }
 
   &:last-child {
-    margin-right: 0px;
+    margin-right: 0;
   }
 }
 

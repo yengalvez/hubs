@@ -8,7 +8,6 @@ import { faExclamationTriangle } from "@fortawesome/free-solid-svg-icons/faExcla
 import { FormattedMessage, injectIntl, useIntl, defineMessages } from "react-intl";
 import styles from "../assets/stylesheets/preferences-screen.scss";
 import { AVAILABLE_LOCALES } from "../assets/locales/locale_config";
-import { themes } from "../utils/theme";
 import MediaDevicesManager from "../utils/media-devices-manager";
 import { MediaDevices, MediaDevicesEvents, PermissionStatus } from "../utils/media-devices-utils";
 import { Slider } from "./input/Slider";
@@ -1034,20 +1033,6 @@ class PreferencesScreen extends Component {
       availableLocales.push({ value: locale, text: AVAILABLE_LOCALES[locale] });
     }
 
-    const availableThemes = [
-      {
-        value: null,
-        text: browserDefault
-      }
-    ];
-
-    for (const { id, name } of themes) {
-      availableThemes.push({
-        value: id,
-        text: name
-      });
-    }
-
     const DEFINITIONS = new Map([
       [
         CATEGORY_TOUCHSCREEN,
@@ -1226,11 +1211,6 @@ class PreferencesScreen extends Component {
             key: "locale",
             prefType: PREFERENCE_LIST_ITEM_TYPE.SELECT,
             options: availableLocales
-          },
-          {
-            key: "theme",
-            prefType: PREFERENCE_LIST_ITEM_TYPE.SELECT,
-            options: availableThemes
           },
           ...(!isLockedDownDemoRoom()
             ? [

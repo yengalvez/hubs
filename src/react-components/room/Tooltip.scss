@@ -15,16 +15,18 @@
 :local(.tip) {
   pointer-events: all;
   min-height: 48px;
-  border-radius: 24px;
-  background-color: theme.$background1-color;
+  border-radius: var(--mv-radius-pill);
+  background-color: rgba(12, 20, 38, 0.86);
   border: 1px solid theme.$border1-color;
-  //width: 360px;
   font-size: theme.$font-size-md;
   justify-content: center;
   align-items: center;
   display: flex;
   flex-direction: column;
   text-align: center;
+  box-shadow: var(--mv-shadow-2);
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
 
   @media (min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
     bottom: 24px;
@@ -121,7 +123,7 @@
   font-weight: 700;
   display: inline-flex;
   height: 32px;
-  margin: 0px 5px 0px 5px;
+  margin: 0 5px;
   align-items: center;
   padding: 12px;
   vertical-align: middle;

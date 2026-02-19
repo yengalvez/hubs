@@ -55,7 +55,7 @@
   grid-row-start: toolbar;
   grid-column-end: -1;
   pointer-events: auto;
-  z-index: 0;
+  z-index: 3;
 }
 
 :local(.modal-container) {
@@ -93,5 +93,5 @@
 }
 
 :local(.streaming) {
-  box-shadow: inset 0 0 0 3px theme.$red;
+  box-shadow: inset 0 0 0 3px rgba(255, 77, 122, 0.75);
 }

@@ -33,38 +33,41 @@
   cursor: pointer;
   -moz-appearance: none;
   -webkit-appearance: none;
+  -webkit-backdrop-filter: blur(var(--mv-blur-sm));
+  backdrop-filter: blur(var(--mv-blur-sm));
 
   &::after {
     content: " ";
     position: absolute;
     background-color: transparent;
-    top: 3px;
-    left: 3px;
-    right: 3px;
-    bottom: 3px;
-    width: 16px;
-    height: 16px;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    width: 14px;
+    height: 14px;
     border-radius: 16px;
+    transition: background-color 0.12s ease;
   }
 
   &:hover::after {
-    background-color: theme.$radio-bg-color-hover;
+    background-color: rgba(113, 174, 255, 0.25);
   }
 
   &:active::after {
-    background-color: theme.$radio-bg-color-pressed;
+    background-color: rgba(93, 144, 230, 0.42);
   }
 
   &:checked::after {
-    background-color: theme.$active-color;
+    background-color: #85e8ff;
   }
 
   &:checked:hover::after {
-    background-color: theme.$active-color-hover;
+    background-color: #a5efff;
   }
 
   &:checked:active::after {
-    background-color: theme.$active-color-pressed;
+    background-color: #6fd9f8;
   }
 }
 

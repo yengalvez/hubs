@@ -1,11 +1,11 @@
 @use "../styles/theme";
 
 :local(.toolbar) {
-  height: 96px;
+  height: 102px;
   display: flex;
-  padding: 12px;
-  background-color: theme.$background1-color;
-  border-top: 1px solid theme.$border1-color;
+  padding: 10px;
+  background: transparent;
+  border-top: none;
   position: relative;
 
   @media (min-width: theme.$breakpoint-lg) {
@@ -19,7 +19,14 @@
   flex: 1;
   justify-content: space-around;
   align-items: center;
-  gap: 0 24px;
+  gap: 0 18px;
+  padding: 6px 10px;
+  border-radius: var(--mv-radius-pill);
+  border: 1px solid theme.$border1-color;
+  background: rgba(11, 20, 38, 0.7);
+  box-shadow: var(--mv-shadow-2);
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
 
   @media (min-width: theme.$breakpoint-lg) {
     flex: 0;

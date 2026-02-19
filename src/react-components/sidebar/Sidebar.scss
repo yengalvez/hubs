@@ -5,22 +5,30 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: theme.$background1-color;
+  background-color: rgba(10, 18, 34, 0.84);
   pointer-events: auto;
   overflow-wrap: break-word;
-  
-  @media(min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
+  box-shadow: var(--mv-shadow-2);
+
+  @media (min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
     border-left: 1px solid theme.$border1-color;
+    border-top-left-radius: var(--mv-radius-lg);
   }
 }
 
 :local(.header) {
   display: flex;
-  height: 48px;
+  height: 52px;
   flex-shrink: 0;
   border-bottom: 1px solid theme.$border1-color;
   align-items: center;
   justify-content: center;
+  background: rgba(13, 24, 44, 0.72);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 :local(.before-title) {
@@ -37,7 +45,7 @@
 
 :local(.content) {
   position: absolute;
-  top: 48px;
+  top: 52px;
   left: 0;
   right: 0;
   bottom: 0;

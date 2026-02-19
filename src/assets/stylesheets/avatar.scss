@@ -10,7 +10,6 @@ body {
   width: 100vw;
   height: 100vh;
   box-sizing: border-box;
- 
   justify-content: center;
   align-items: center;
   display: flex;
@@ -24,7 +23,7 @@ body {
     max-width: 150px;
     max-height: 64px;
     margin-bottom: 22px;
-    filter: drop-shadow(0 0 4px #888);
+    filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.42));
 
     @media (min-width: 500px) {
       position: absolute;
@@ -46,6 +45,12 @@ body {
     max-height: 1000px;
     height: 100%;
     padding: 40px;
+    border-radius: var(--mv-radius-lg);
+    border: 1px solid theme.$border1-color;
+    background: rgba(11, 20, 38, 0.72);
+    box-shadow: var(--mv-shadow-2);
+    -webkit-backdrop-filter: blur(var(--mv-blur-md));
+    backdrop-filter: blur(var(--mv-blur-md));
   }
 
   :local(.title) {
@@ -53,7 +58,6 @@ body {
     font-weight: bold;
     color: theme.$text1-color;
     width: 100%;
-    color: theme.$text1-color;
     text-align: center;
   }
 
@@ -64,17 +68,19 @@ body {
   }
 
   :local(.attributions) {
-    font-size: 1.0em;
+    font-size: 1em;
     padding-top: 4px;
     margin-bottom: 1em;
+    color: theme.$text2-color;
   }
 
   :local(.form-submit) {
     @extend %action-button;
-    background: theme.$primary-color;
+    background: linear-gradient(130deg, var(--mv-accent-1) 0%, var(--mv-accent-2) 100%);
     margin: 0;
     min-height: max-content;
     margin-top: 16px;
+
     &:disabled {
       background-color: theme.$disabled-bg-color;
       cursor: default;
@@ -88,6 +94,7 @@ body {
     display: flex;
     position: relative;
     max-width: 300px;
+    border: 1px solid theme.$border1-color;
   }
 
   :local(.copy-tip) {

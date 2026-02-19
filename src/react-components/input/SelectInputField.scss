@@ -1,6 +1,6 @@
 @use "../styles/theme.scss";
 
-$input-height: 40px;
+$input-height: 42px;
 
 :local(.select-input) {
   position: relative;
@@ -12,12 +12,15 @@ $input-height: 40px;
   justify-content: space-between;
   height: $input-height;
   border: 1px solid theme.$input-border-color;
-  border-radius: theme.$border-radius-regular;
+  border-radius: var(--mv-radius-sm);
   color: theme.$text1-color;
   background-color: theme.$input-bg-color;
   width: 100%;
   max-width: 300px;
-  padding: 0 8px;
+  padding: 0 10px;
+  box-shadow: var(--mv-shadow-1);
+  -webkit-backdrop-filter: blur(var(--mv-blur-sm));
+  backdrop-filter: blur(var(--mv-blur-sm));
 
   span {
     overflow: hidden;
@@ -35,7 +38,7 @@ $input-height: 40px;
 
   &:focus-within {
     border-color: theme.$input-outline-color;
-    box-shadow: 0 0 0 2px theme.$input-outline-color;
+    box-shadow: 0 0 0 2px rgba(79, 207, 255, 0.45), var(--mv-shadow-1);
   }
 
   svg {
@@ -45,16 +48,19 @@ $input-height: 40px;
 
 :local(.dropdown) {
   position: absolute;
-  top: $input-height + 4px;
+  top: $input-height + 6px;
   display: none;
   flex-direction: column;
-  background-color: theme.$input-bg-color;
-  border-radius: 8px;
-  padding: 8px 0;
+  background-color: rgba(12, 20, 38, 0.92);
+  border: 1px solid theme.$border1-color;
+  border-radius: var(--mv-radius-md);
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
+  padding: 6px 0;
   z-index: 99999;
   left: 0;
   right: 0;
-  box-shadow: -1px -1px 1px theme.$border1-color, 3px 3px 6px theme.$shadow-color;
+  box-shadow: var(--mv-shadow-2);
   max-height: 320px;
   overflow-y: auto;
 }
@@ -71,8 +77,9 @@ $input-height: 40px;
 
 :local(.dropdown-item) {
   width: 100%;
-  padding: 8px;
+  padding: 9px 10px;
   cursor: pointer;
+  color: theme.$text2-color;
 
   &:focus {
     outline: none;
@@ -81,5 +88,5 @@ $input-height: 40px;
 
 :local(.highlighted-item) {
   color: theme.$active-text-color;
-  background-color: theme.$active-color-hover;
+  background: linear-gradient(130deg, rgba(38, 209, 255, 0.2) 0%, rgba(63, 123, 255, 0.35) 100%);
 }

@@ -14,7 +14,7 @@ body,
 }
 
 body {
-  background: theme.$background1-color;
+  background: radial-gradient(140% 100% at 0% 0%, #1e3358 0%, #0b1324 36%, #050812 100%);
 }
 
 :global(#root),

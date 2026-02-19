@@ -2,6 +2,9 @@
 
 :local(.object) {
   font-size: theme.$font-size-sm;
+  padding: 8px 10px;
+  border-radius: var(--mv-radius-sm);
+  border: 1px solid transparent;
 
   & > * {
     margin-right: 8px;
@@ -9,6 +12,11 @@
     &:last-child {
       margin-right: 0;
     }
+  }
+
+  &:hover {
+    background: rgba(21, 35, 62, 0.55);
+    border-color: rgba(120, 175, 255, 0.2);
   }
 
   svg {

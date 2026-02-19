@@ -4,13 +4,13 @@ import { AVAILABLE_LOCALES, FALLBACK_LOCALES } from "../assets/locales/locale_co
 // These are set in the admin panel and are only included as fallbacks.
 const defaultLocaleData = {
   "app-name": location.hostname,
-  "editor-name": "Scene Editor",
+  "editor-name": "Editor de Escenas",
   "contact-email": "app@company.com",
-  "company-name": "Company",
+  "company-name": "Comunidad",
   "share-hashtag": "#app",
   // what you can do here
-  "app-description": "Gather, share, and collaborate together in a virtual, private, and safe space.",
-  "app-tagline": "Private social VR in your web browser"
+  "app-description": "Reúnete, comparte y colabora en un espacio virtual privado y seguro.",
+  "app-tagline": "VR social privada en tu navegador"
 };
 
 const DEFAULT_LOCALE = "es";

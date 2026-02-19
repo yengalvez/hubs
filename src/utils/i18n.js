@@ -1,5 +1,6 @@
 import configs from "./configs";
 import { AVAILABLE_LOCALES, FALLBACK_LOCALES } from "../assets/locales/locale_config";
+import defaultSpanishLocaleData from "../assets/locales/es.json";
 
 // These are set in the admin panel and are only included as fallbacks.
 const defaultLocaleData = {
@@ -13,12 +14,17 @@ const defaultLocaleData = {
   "app-tagline": "VR social privada en tu navegador"
 };
 
+function mergeLocaleData(localeData) {
+  return { ...defaultLocaleData, ...(localeData || {}) };
+}
+
 const DEFAULT_LOCALE = "es";
 const cachedMessages = new Map();
 const cachedLocaleData = new Map();
 
 let _locale = DEFAULT_LOCALE;
-let _localeData = defaultLocaleData;
+cachedLocaleData.set(DEFAULT_LOCALE, mergeLocaleData(defaultSpanishLocaleData));
+let _localeData = cachedLocaleData.get(DEFAULT_LOCALE);
 let _localeRequestId = 0;
 
 function findLocale(locale) {
@@ -59,10 +65,6 @@ function findLocale(locale) {
     }
   }
   return DEFAULT_LOCALE;
-}
-
-function mergeLocaleData(localeData) {
-  return { ...defaultLocaleData, ...(localeData || {}) };
 }
 
 function loadLocaleData(locale) {

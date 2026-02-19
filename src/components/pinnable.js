@@ -79,7 +79,12 @@ AFRAME.registerComponent("pinnable", {
     this.wasHeld = isHeld;
 
     this.transformObjectSystem = this.transformObjectSystem || AFRAME.scenes[0].systems["transform-selected-object"];
-    const transforming = this.transformObjectSystem.transforming && this.transformObjectSystem.target.el === this.el;
+    const transforming = !!(
+      this.transformObjectSystem &&
+      this.transformObjectSystem.transforming &&
+      this.transformObjectSystem.target &&
+      this.transformObjectSystem.target.el === this.el
+    );
     if (!didFireThisFrame && !transforming && this.wasTransforming && isMine) {
       this._persistAndAnimate();
     }

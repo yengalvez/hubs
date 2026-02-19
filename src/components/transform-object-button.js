@@ -358,12 +358,14 @@ AFRAME.registerComponent("visible-if-transforming", {
   },
   init() {},
   tick(t) {
-    const shouldBeVisible =
-      AFRAME.scenes[0].systems["transform-selected-object"].transforming &&
-      AFRAME.scenes[0].systems["transform-selected-object"].hand.el.id.indexOf(this.data.hand) !== -1;
+    const transformSystem =
+      AFRAME.scenes[0] && AFRAME.scenes[0].systems && AFRAME.scenes[0].systems["transform-selected-object"];
+    const handId = transformSystem && transformSystem.hand && transformSystem.hand.el && transformSystem.hand.el.id;
+    const isTransforming = !!(transformSystem && transformSystem.transforming);
+    const shouldBeVisible = isTransforming && typeof handId === "string" && handId.indexOf(this.data.hand) !== -1;
     const visibleNeedsUpdate = this.el.getAttribute("visible") !== shouldBeVisible;
     if (visibleNeedsUpdate) {
-      this.el.setAttribute("visible", AFRAME.scenes[0].systems["transform-selected-object"].transforming);
+      this.el.setAttribute("visible", shouldBeVisible);
     }
 
     if (shouldBeVisible) {

@@ -81,14 +81,14 @@ function loadLocaleData(locale) {
     })
     .catch(error => {
       console.warn(`Failed loading locale "${locale}", falling back to defaults.`, error);
-      const fallbackLocaleData = mergeLocaleData();
+      const fallbackLocaleData = mergeLocaleData(defaultSpanishLocaleData);
       cachedLocaleData.set(locale, fallbackLocaleData);
       return fallbackLocaleData;
     });
 }
 
-export function setLocale(locale = FORCED_LOCALE) {
-  const resolvedLocale = findLocale(locale || FORCED_LOCALE);
+export function setLocale() {
+  const resolvedLocale = findLocale(FORCED_LOCALE);
   const requestId = ++_localeRequestId;
 
   loadLocaleData(resolvedLocale).then(localeData => {

@@ -201,7 +201,19 @@ import { PDFMenuPrefab } from "./prefabs/pdf-menu";
 import { loadWaypointPreviewModel, WaypointPreview } from "./prefabs/waypoint-preview";
 import { preload } from "./utils/preload";
 
-document.body.classList.add("is-hub-page");
+if (document.body) {
+  document.body.classList.add("is-hub-page");
+} else {
+  window.addEventListener(
+    "DOMContentLoaded",
+    () => {
+      if (document.body) {
+        document.body.classList.add("is-hub-page");
+      }
+    },
+    { once: true }
+  );
+}
 
 window.APP = new App();
 function addToScene(entityDef, visible) {

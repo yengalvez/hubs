@@ -14,7 +14,7 @@
   position: relative;
   overflow: hidden;
   display: flex;
-  background-color: rgba(17, 29, 52, 0.9);
+  background-color: rgba(17, 29, 52, 0.95);
   border: 1px solid theme.$tile-button-border-color;
   border-radius: var(--mv-radius-md);
   box-shadow: var(--mv-shadow-1);
@@ -75,7 +75,7 @@
 }
 
 :local(.tile-action), :local(.member-count) {
-  background: rgba(20, 34, 60, 0.98);
+  background: rgba(20, 34, 60, 1);
   color: theme.$tile-button-text-color;
   height: 30px;
   border-radius: 30px;

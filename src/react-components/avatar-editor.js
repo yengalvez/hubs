@@ -504,7 +504,7 @@ class AvatarEditor extends Component {
           </div>
         ) : (
           <form onSubmit={this.uploadAvatar} className="center">
-            {this.textField("name", isAvaturnPrivateMode ? "Nombre del avatar" : "Name", false, true)}
+            {this.textField("name", isAvaturnPrivateMode ? "Nombre del avatar" : "Nombre", false, true)}
             {isAvaturnPrivateMode && (
               <p className="mode-info">
                 <FormattedMessage
@@ -569,7 +569,7 @@ class AvatarEditor extends Component {
                       )}
 
                     <label>
-                      <FormattedMessage id="avatar-editor.skin-section" defaultMessage="Skin" />
+                      <FormattedMessage id="avatar-editor.skin-section" defaultMessage="Piel" />
                     </label>
                     {this.mapField(
                       "base_map",
@@ -581,7 +581,7 @@ class AvatarEditor extends Component {
                     )}
                     <details>
                       <summary>
-                        <FormattedMessage id="avatar-editor.advanced-section" defaultMessage="Advanced" />
+                        <FormattedMessage id="avatar-editor.advanced-section" defaultMessage="Avanzado" />
                       </summary>
                       {this.mapField(
                         "emissive_map",
@@ -615,7 +615,7 @@ class AvatarEditor extends Component {
                     </details>
 
                     <label>
-                      <FormattedMessage id="avatar-editor.share-settings" defaultMessage="Share Settings" />
+                      <FormattedMessage id="avatar-editor.share-settings" defaultMessage="Ajustes para compartir" />
                     </label>
                     {this.checkbox(
                       "allow_promotion",
@@ -752,9 +752,9 @@ class AvatarEditor extends Component {
             <div>
               <button disabled={this.state.uploading} className="form-submit" type="submit">
                 {this.state.uploading ? (
-                  <FormattedMessage id="avatar-editor.submit-button.uploading" defaultMessage="Uploading..." />
+                  <FormattedMessage id="avatar-editor.submit-button.uploading" defaultMessage="Subiendo..." />
                 ) : (
-                  <FormattedMessage id="avatar-editor.submit-button.save" defaultMessage="Save" />
+                  <FormattedMessage id="avatar-editor.submit-button.save" defaultMessage="Guardar" />
                 )}
               </button>
             </div>

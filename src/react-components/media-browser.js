@@ -87,69 +87,69 @@ const DEFAULT_FACETS = {
 const poweredByMessages = defineMessages({
   images: {
     id: "media-browser.powered_by.images",
-    defaultMessage: "Search by Bing"
+    defaultMessage: "Búsqueda con Bing"
   },
   videos: {
     id: "media-browser.powered_by.videos",
-    defaultMessage: "Search by Bing"
+    defaultMessage: "Búsqueda con Bing"
   },
   youtube: {
     id: "media-browser.powered_by.youtube",
-    defaultMessage: "Search by Google"
+    defaultMessage: "Búsqueda con Google"
   },
   gifs: {
     id: "media-browser.powered_by.gifs",
-    defaultMessage: "Search by Tenor"
+    defaultMessage: "Búsqueda con Tenor"
   },
   sketchfab: {
     id: "media-browser.powered_by.sketchfab",
-    defaultMessage: "Search by Sketchfab"
+    defaultMessage: "Búsqueda con Sketchfab"
   },
   twitch: {
     id: "media-browser.powered_by.twitch",
-    defaultMessage: "Search by Twitch"
+    defaultMessage: "Búsqueda con Twitch"
   },
   scenes: {
     id: "media-browser.powered_by.scenes",
-    defaultMessage: "Made with {editorName}"
+    defaultMessage: "Hecho con {editorName}"
   }
 });
 
 const customObjectMessages = defineMessages({
   object: {
     id: "media-browser.add_custom_object",
-    defaultMessage: "Custom URL or File"
+    defaultMessage: "URL o archivo personalizado"
   },
   scene: {
     id: "media-browser.add_custom_scene",
-    defaultMessage: "Custom Scene"
+    defaultMessage: "Escena personalizada"
   },
   avatar: {
     id: "media-browser.add_custom_avatar",
-    defaultMessage: "Avatar GLB URL"
+    defaultMessage: "URL de avatar GLB"
   }
 });
 
 const searchPlaceholderMessages = defineMessages({
-  scenes: { id: "media-browser.search-placeholder.scenes", defaultMessage: "Search Scenes..." },
-  avatars: { id: "media-browser.search-placeholder.avatars", defaultMessage: "Search Avatars..." },
-  videos: { id: "media-browser.search-placeholder.videos", defaultMessage: "Search for Videos..." },
-  images: { id: "media-browser.search-placeholder.images", defaultMessage: "Search for Images..." },
-  youtube: { id: "media-browser.search-placeholder.youtube", defaultMessage: "Search for Youtube videos..." },
-  gifs: { id: "media-browser.search-placeholder.gifs", defaultMessage: "Search for GIFs..." },
-  twitch: { id: "media-browser.search-placeholder.twitch", defaultMessage: "Search for Twitch streams..." },
-  sketchfab: { id: "media-browser.search-placeholder.sketchfab", defaultMessage: "Search Sketchfab Models..." },
-  default: { id: "media-browser.search-placeholder.default", defaultMessage: "Search..." }
+  scenes: { id: "media-browser.search-placeholder.scenes", defaultMessage: "Buscar escenas..." },
+  avatars: { id: "media-browser.search-placeholder.avatars", defaultMessage: "Buscar avatares..." },
+  videos: { id: "media-browser.search-placeholder.videos", defaultMessage: "Buscar videos..." },
+  images: { id: "media-browser.search-placeholder.images", defaultMessage: "Buscar imágenes..." },
+  youtube: { id: "media-browser.search-placeholder.youtube", defaultMessage: "Buscar videos de YouTube..." },
+  gifs: { id: "media-browser.search-placeholder.gifs", defaultMessage: "Buscar GIFs..." },
+  twitch: { id: "media-browser.search-placeholder.twitch", defaultMessage: "Buscar streams de Twitch..." },
+  sketchfab: { id: "media-browser.search-placeholder.sketchfab", defaultMessage: "Buscar modelos de Sketchfab..." },
+  default: { id: "media-browser.search-placeholder.default", defaultMessage: "Buscar..." }
 });
 
 const emptyMessages = defineMessages({
   favorites: {
     id: "media-browser.empty.favorites",
-    defaultMessage: "You don't have any favorites. Click a ⭐ to add to your favorites."
+    defaultMessage: "No tienes favoritos. Pulsa ⭐ para añadir elementos."
   },
   default: {
     id: "media-browser.empty.default",
-    defaultMessage: "No results. Try entering a new search above."
+    defaultMessage: "Sin resultados. Prueba otra búsqueda."
   }
 });
 
@@ -556,7 +556,7 @@ class MediaBrowserContainer extends Component {
                 label={
                   <FormattedMessage
                     id="media-browser.create-scene"
-                    defaultMessage="Create Scene with {editorName}"
+                    defaultMessage="Crear escena con {editorName}"
                     values={{ editorName: configs.translation("editor-name") }}
                   />
                 }

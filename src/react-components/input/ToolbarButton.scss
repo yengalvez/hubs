@@ -44,9 +44,8 @@
   height: 58px;
   line-height: 0;
   padding: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: grid;
+  place-items: center;
   margin: 0 auto;
   border: 1px solid theme.$toolbar-basic-border-color;
   background: rgba(16, 27, 50, 0.76);
@@ -55,6 +54,10 @@
   backdrop-filter: blur(var(--mv-blur-sm));
 
   transition: transform 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
+
+  & > * {
+    grid-area: 1 / 1;
+  }
 
   svg {
     display: block;
@@ -71,6 +74,33 @@
       transition: fill 0.1s ease-in-out;
     }
   }
+}
+
+:local(.status-indicator) {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(5, 8, 18, 0.9);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+:local(.status-recording) {
+  background: #ff4d7a;
+}
+
+:local(.status-unread) {
+  background: #26d1ff;
+}
+
+:local(.status-enabled) {
+  background: #2bd6a2;
+}
+
+:local(.status-disabled) {
+  background: #6f7fa1;
 }
 
 :local(.large) :local(.icon-container) {

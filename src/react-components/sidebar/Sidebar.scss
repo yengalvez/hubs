@@ -5,7 +5,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: linear-gradient(180deg, rgba(13, 24, 44, 0.95) 0%, rgba(10, 18, 34, 0.97) 100%);
+  background: linear-gradient(180deg, rgba(13, 24, 44, 0.975) 0%, rgba(10, 18, 34, 0.985) 100%);
   pointer-events: auto;
   overflow-wrap: break-word;
   border: 1px solid theme.$border1-color;
@@ -23,7 +23,7 @@
   border-bottom: 1px solid theme.$border1-color;
   align-items: center;
   justify-content: center;
-  background: rgba(16, 29, 52, 0.9);
+  background: rgba(16, 29, 52, 0.95);
   position: sticky;
   top: 0;
   z-index: 2;

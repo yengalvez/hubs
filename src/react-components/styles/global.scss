@@ -919,12 +919,14 @@ body,
 }
 
 body:not(.is-hub-page),
-#root,
-.home-root {
+body:not(.is-hub-page) #root,
+body:not(.is-hub-page) .home-root {
   background: radial-gradient(140% 100% at 0% 0%, #1e3358 0%, #0b1324 36%, #050812 100%);
 }
 
-body.is-hub-page {
+body.is-hub-page,
+body.is-hub-page #root,
+body.is-hub-page .home-root {
   background: transparent;
 }
 

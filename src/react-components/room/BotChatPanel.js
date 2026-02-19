@@ -26,6 +26,10 @@ export function BotChatPanel({
     id: "bot-chat-panel.conversations.aria",
     defaultMessage: "Bot conversations"
   });
+  const inputPlaceholder = intl.formatMessage({
+    id: "bot-chat-panel.input-placeholder",
+    defaultMessage: "Write a private message..."
+  });
 
   const conversationTabs = useMemo(() => {
     const list = Array.isArray(conversations) ? conversations : [];
@@ -167,7 +171,7 @@ export function BotChatPanel({
                 onSend(e);
               }
             }}
-            placeholder="Write a private message..."
+            placeholder={inputPlaceholder}
             disabled={sending || sendingDisabled}
           />
           <div className={styles.composerFooter}>

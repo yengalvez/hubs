@@ -908,23 +908,35 @@ body[data-theme="dark"] {
   --color-brand-cool: linear-gradient(110deg, #26d1ff 0%, #3f7bff 100%);
 }
 
-html,
+html {
+  background: #050812;
+}
+
 body,
 #root,
 .home-root {
-  background: radial-gradient(140% 100% at 0% 0%, #1e3358 0%, #0b1324 36%, #050812 100%);
   color: var(--mv-text-main);
+}
+
+body:not(.is-hub-page),
+#root,
+.home-root {
+  background: radial-gradient(140% 100% at 0% 0%, #1e3358 0%, #0b1324 36%, #050812 100%);
+}
+
+body.is-hub-page {
+  background: transparent;
 }
 
 #ui-root {
   background: transparent !important;
 }
 
-body {
+body:not(.is-hub-page) {
   background-attachment: fixed;
 }
 
-body::after {
+body:not(.is-hub-page)::after {
   content: "";
   position: fixed;
   pointer-events: none;
@@ -932,6 +944,10 @@ body::after {
   background: radial-gradient(60% 50% at 10% 0%, rgba(38, 209, 255, 0.12) 0%, rgba(38, 209, 255, 0) 80%),
     radial-gradient(40% 40% at 90% 20%, rgba(63, 123, 255, 0.12) 0%, rgba(63, 123, 255, 0) 85%);
   z-index: -1;
+}
+
+body.is-hub-page::after {
+  display: none;
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

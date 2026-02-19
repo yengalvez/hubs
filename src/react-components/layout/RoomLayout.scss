@@ -25,7 +25,9 @@
   grid-column-start: sidebar;
   height: 100%;
   overflow: hidden;
-  width: 450px;
+  width: 470px;
+  padding: 10px 10px 10px 0;
+  box-sizing: border-box;
 
   @media (max-width: theme.$breakpoint-lg - 1), (max-height: theme.$breakpoint-vr - 1) {
     position: fixed;
@@ -35,6 +37,8 @@
     right: 0;
     margin: 0;
     width: 100%;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 8px)
+      calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 8px);
     z-index: 9;
   }
 }

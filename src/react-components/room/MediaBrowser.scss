@@ -11,22 +11,27 @@
 
 :local(.button-nav) {
   display: flex;
-  padding: 8px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
   overflow-x: auto;
   flex-shrink: 0;
   border-bottom: 1px solid theme.$border1-color;
+  background-color: rgba(14, 23, 43, 0.82);
+  -webkit-backdrop-filter: blur(var(--mv-blur-sm));
+  backdrop-filter: blur(var(--mv-blur-sm));
 }
 
 :local(.button-nav) > * {
-  margin-right: theme.$spacing-sm;
+  flex: 0 0 auto;
 }
 
 :local(.button-nav) > :last-child {
-  margin-right: 0;
+  margin-right: theme.$spacing-xs;
 }
 
 :local(.facets-nav) {
-  background-color: rgba(10, 18, 34, 0.5);
+  background-color: rgba(10, 18, 34, 0.86);
 }
 
 :local(.content) {
@@ -34,13 +39,15 @@
   flex: 1;
   flex-direction: column;
   overflow-y: auto;
+  padding: 12px;
+  background: rgba(8, 14, 28, 0.52);
 }
 
 :local(.pager) {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 24px;
+  margin: 12px 0 28px;
 }
 
 :local(.pager-button) {
@@ -83,4 +90,6 @@
   align-items: center;
   justify-content: center;
   text-align: center;
+  color: theme.$text2-color;
+  padding: 12px;
 }

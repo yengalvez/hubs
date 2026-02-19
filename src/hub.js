@@ -201,6 +201,8 @@ import { PDFMenuPrefab } from "./prefabs/pdf-menu";
 import { loadWaypointPreviewModel, WaypointPreview } from "./prefabs/waypoint-preview";
 import { preload } from "./utils/preload";
 
+document.body.classList.add("is-hub-page");
+
 window.APP = new App();
 function addToScene(entityDef, visible) {
   return getScene().then(scene => {
@@ -853,6 +855,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     performConditionalSignIn(
       () => hubChannel.signedIn,
       () => pushHistoryState(history, "overlay", "avatar-editor"),
+      SignInMessages.createAvatar
+    );
+  });
+
+  window.addEventListener("action_create_avaturn_avatar", () => {
+    performConditionalSignIn(
+      () => hubChannel.signedIn,
+      () => pushHistoryState(history, "overlay", "avatar-editor", { mode: "avaturn-private" }),
       SignInMessages.createAvatar
     );
   });

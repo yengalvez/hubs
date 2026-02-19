@@ -3,13 +3,14 @@
 :local(.toolbar) {
   height: 102px;
   display: flex;
-  padding: 10px;
+  padding: 10px 12px;
   background: transparent;
   border-top: none;
   position: relative;
+  align-items: flex-end;
 
   @media (min-width: theme.$breakpoint-lg) {
-    padding: 12px 24px;
+    padding: 12px 22px;
     justify-content: space-between;
   }
 }
@@ -19,11 +20,12 @@
   flex: 1;
   justify-content: space-around;
   align-items: center;
-  gap: 0 18px;
-  padding: 6px 10px;
+  gap: 0 14px;
+  min-height: 76px;
+  padding: 8px 12px;
   border-radius: var(--mv-radius-pill);
-  border: 1px solid theme.$border1-color;
-  background: rgba(11, 20, 38, 0.7);
+  border: 1px solid var(--mv-border);
+  background: rgba(11, 20, 38, 0.82);
   box-shadow: var(--mv-shadow-2);
   -webkit-backdrop-filter: blur(var(--mv-blur-md));
   backdrop-filter: blur(var(--mv-blur-md));
@@ -36,9 +38,9 @@
 :local(.center_content) {
   position: absolute;
   display: flex;
-  width: calc(100% - 48px);
+  width: calc(100% - 44px);
   justify-content: center;
-  z-index: -1;
+  z-index: 0;
 
   @media (max-width: theme.$breakpoint-lg) {
     width: 100%;

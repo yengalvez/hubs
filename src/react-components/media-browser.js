@@ -8,6 +8,7 @@ import { showFullScreenIfWasFullScreen } from "../utils/fullscreen";
 import { AvatarUrlModalContainer } from "./room/AvatarUrlModalContainer";
 import { SceneUrlModalContainer } from "./room/SceneUrlModalContainer";
 import { ObjectUrlModalContainer } from "./room/ObjectUrlModalContainer";
+import { AvaturnHelpModal } from "./room/AvaturnHelpModal";
 import { MediaBrowser } from "./room/MediaBrowser";
 import { IconButton } from "./input/IconButton";
 import { ReactComponent as UploadIcon } from "./icons/Upload.svg";
@@ -31,35 +32,55 @@ const PRIVACY_POLICY_LINKS = {
 
 const DEFAULT_FACETS = {
   sketchfab: [
-    { text: "Featured", params: { filter: "featured" } },
-    { text: "Animals", params: { filter: "animals-pets" } },
-    { text: "Architecture", params: { filter: "architecture" } },
-    { text: "Art", params: { filter: "art-abstract" } },
-    { text: "Vehicles", params: { filter: "cars-vehicles" } },
-    { text: "Characters", params: { filter: "characters-creatures" } },
-    { text: "Culture", params: { filter: "cultural-heritage-history" } },
-    { text: "Gadgets", params: { filter: "electronics-gadgets" } },
-    { text: "Fashion", params: { filter: "fashion-style" } },
-    { text: "Food", params: { filter: "food-drink" } },
-    { text: "Furniture", params: { filter: "furniture-home" } },
-    { text: "Music", params: { filter: "music" } },
-    { text: "Nature", params: { filter: "nature-plants" } },
-    { text: "News", params: { filter: "news-politics" } },
-    { text: "People", params: { filter: "people" } },
-    { text: "Places", params: { filter: "places-travel" } },
-    { text: "Science", params: { filter: "science-technology" } },
-    { text: "Sports", params: { filter: "sports-fitness" } },
-    { text: "Weapons", params: { filter: "weapons-military" } }
+    { messageId: "media-browser.facet.featured", defaultMessage: "Destacados", params: { filter: "featured" } },
+    { messageId: "media-browser.facet.animals", defaultMessage: "Animales", params: { filter: "animals-pets" } },
+    {
+      messageId: "media-browser.facet.architecture",
+      defaultMessage: "Arquitectura",
+      params: { filter: "architecture" }
+    },
+    { messageId: "media-browser.facet.art", defaultMessage: "Arte", params: { filter: "art-abstract" } },
+    { messageId: "media-browser.facet.vehicles", defaultMessage: "Vehículos", params: { filter: "cars-vehicles" } },
+    {
+      messageId: "media-browser.facet.characters",
+      defaultMessage: "Personajes",
+      params: { filter: "characters-creatures" }
+    },
+    {
+      messageId: "media-browser.facet.culture",
+      defaultMessage: "Cultura",
+      params: { filter: "cultural-heritage-history" }
+    },
+    {
+      messageId: "media-browser.facet.gadgets",
+      defaultMessage: "Gadgets",
+      params: { filter: "electronics-gadgets" }
+    },
+    { messageId: "media-browser.facet.fashion", defaultMessage: "Moda", params: { filter: "fashion-style" } },
+    { messageId: "media-browser.facet.food", defaultMessage: "Comida", params: { filter: "food-drink" } },
+    {
+      messageId: "media-browser.facet.furniture",
+      defaultMessage: "Muebles",
+      params: { filter: "furniture-home" }
+    },
+    { messageId: "media-browser.facet.music", defaultMessage: "Música", params: { filter: "music" } },
+    { messageId: "media-browser.facet.nature", defaultMessage: "Naturaleza", params: { filter: "nature-plants" } },
+    { messageId: "media-browser.facet.news", defaultMessage: "Noticias", params: { filter: "news-politics" } },
+    { messageId: "media-browser.facet.people", defaultMessage: "Personas", params: { filter: "people" } },
+    { messageId: "media-browser.facet.places", defaultMessage: "Lugares", params: { filter: "places-travel" } },
+    { messageId: "media-browser.facet.science", defaultMessage: "Ciencia", params: { filter: "science-technology" } },
+    { messageId: "media-browser.facet.sports", defaultMessage: "Deportes", params: { filter: "sports-fitness" } },
+    { messageId: "media-browser.facet.weapons", defaultMessage: "Armas", params: { filter: "weapons-military" } }
   ],
   avatars: [
-    { text: "Featured", params: { filter: "featured" } },
-    { text: "My Avatars", params: { filter: "my-avatars" } },
-    { text: "Newest", params: { filter: "" } }
+    { messageId: "media-browser.facet.featured", defaultMessage: "Destacados", params: { filter: "featured" } },
+    { messageId: "media-browser.facet.my-avatars", defaultMessage: "Mis avatares", params: { filter: "my-avatars" } },
+    { messageId: "media-browser.facet.newest", defaultMessage: "Más nuevos", params: { filter: "" } }
   ],
   favorites: [],
   scenes: [
-    { text: "Featured", params: { filter: "featured" } },
-    { text: "My Scenes", params: { filter: "my-scenes" } }
+    { messageId: "media-browser.facet.featured", defaultMessage: "Destacados", params: { filter: "featured" } },
+    { messageId: "media-browser.facet.my-scenes", defaultMessage: "Mis escenas", params: { filter: "my-scenes" } }
   ]
 };
 
@@ -198,7 +219,10 @@ class MediaBrowserContainer extends Component {
         return { text: s, params: { q: s } };
       });
     } else {
-      newState.facets = DEFAULT_FACETS[urlSource] || [];
+      newState.facets = (DEFAULT_FACETS[urlSource] || []).map(facet => ({
+        text: facet.defaultMessage,
+        params: facet.params
+      }));
     }
 
     return newState;
@@ -339,6 +363,14 @@ class MediaBrowserContainer extends Component {
 
   onCreateAvatar = () => {
     window.dispatchEvent(new CustomEvent("action_create_avatar"));
+  };
+
+  onCreateAvaturnAvatar = () => {
+    window.dispatchEvent(new CustomEvent("action_create_avaturn_avatar"));
+  };
+
+  onShowAvaturnHelp = () => {
+    this.props.showNonHistoriedDialog(AvaturnHelpModal);
   };
 
   processThumbnailUrl = (entry, thumbnailWidth, thumbnailHeight) => {
@@ -488,11 +520,28 @@ class MediaBrowserContainer extends Component {
         !showEmptyStringOnNoResult ? (
           <>
             {urlSource === "avatars" && (
-              <CreateTile
-                type="avatar"
-                onClick={this.onCreateAvatar}
-                label={<FormattedMessage id="media-browser.create-avatar" defaultMessage="Create Avatar" />}
-              />
+              <>
+                <CreateTile
+                  type="avatar"
+                  onClick={this.onCreateAvatar}
+                  label={<FormattedMessage id="media-browser.create-avatar" defaultMessage="Crear avatar" />}
+                />
+                <CreateTile
+                  type="avatar"
+                  onClick={this.onCreateAvaturnAvatar}
+                  label={
+                    <FormattedMessage
+                      id="media-browser.create-avaturn-private"
+                      defaultMessage="Subir Avaturn (privado)"
+                    />
+                  }
+                />
+                <CreateTile
+                  type="avatar"
+                  onClick={this.onShowAvaturnHelp}
+                  label={<FormattedMessage id="media-browser.avaturn-help" defaultMessage="Guía Avaturn" />}
+                />
+              </>
             )}
             {urlSource === "scenes" && configs.feature("enable_spoke") && (
               <CreateTile

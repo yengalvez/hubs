@@ -5,22 +5,20 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: rgba(10, 18, 34, 0.84);
+  background-color: rgba(10, 18, 34, 0.92);
   pointer-events: auto;
   overflow-wrap: break-word;
+  border: 1px solid theme.$border1-color;
+  border-radius: var(--mv-radius-lg);
+  overflow: hidden;
   -webkit-backdrop-filter: blur(var(--mv-blur-md));
   backdrop-filter: blur(var(--mv-blur-md));
   box-shadow: var(--mv-shadow-2);
-
-  @media (min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
-    border-left: 1px solid theme.$border1-color;
-    border-top-left-radius: var(--mv-radius-lg);
-  }
 }
 
 :local(.header) {
   display: flex;
-  height: 52px;
+  height: 56px;
   flex-shrink: 0;
   border-bottom: 1px solid theme.$border1-color;
   align-items: center;
@@ -45,7 +43,7 @@
 
 :local(.content) {
   position: absolute;
-  top: 52px;
+  top: 56px;
   left: 0;
   right: 0;
   bottom: 0;

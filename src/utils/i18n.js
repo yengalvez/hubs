@@ -15,9 +15,11 @@ const defaultLocaleData = {
 
 const DEFAULT_LOCALE = "es";
 const cachedMessages = new Map();
+const cachedLocaleData = new Map();
 
 let _locale = DEFAULT_LOCALE;
 let _localeData = defaultLocaleData;
+let _localeRequestId = 0;
 
 function findLocale(locale) {
   const locales = (() => {
@@ -42,7 +44,7 @@ function findLocale(locale) {
       return curLocale;
     }
     if (Object.prototype.hasOwnProperty.call(FALLBACK_LOCALES, curLocale)) {
-      Object.prototype.hasOwnProperty.call(FALLBACK_LOCALES, curLocale);
+      return FALLBACK_LOCALES[curLocale];
     }
     // Also check the primary language subtag in case
     // we do not have an entry for full tag
@@ -59,25 +61,42 @@ function findLocale(locale) {
   return DEFAULT_LOCALE;
 }
 
+function mergeLocaleData(localeData) {
+  return { ...defaultLocaleData, ...(localeData || {}) };
+}
+
+function loadLocaleData(locale) {
+  if (cachedLocaleData.has(locale)) {
+    return Promise.resolve(cachedLocaleData.get(locale));
+  }
+
+  return import(`../assets/locales/${locale}.json`)
+    .then(({ default: localeData }) => {
+      const mergedLocaleData = mergeLocaleData(localeData);
+      cachedLocaleData.set(locale, mergedLocaleData);
+      return mergedLocaleData;
+    })
+    .catch(error => {
+      console.warn(`Failed loading locale "${locale}", falling back to defaults.`, error);
+      const fallbackLocaleData = mergeLocaleData();
+      cachedLocaleData.set(locale, fallbackLocaleData);
+      return fallbackLocaleData;
+    });
+}
+
 export function setLocale(locale) {
   const resolvedLocale = findLocale(locale);
+  const requestId = ++_localeRequestId;
 
-  if (resolvedLocale === DEFAULT_LOCALE) {
+  loadLocaleData(resolvedLocale).then(localeData => {
+    // Ignore stale async locale responses.
+    if (requestId !== _localeRequestId) return;
+
     _locale = resolvedLocale;
-    _localeData = defaultLocaleData;
+    _localeData = localeData;
+    cachedMessages.delete(_locale);
     window.dispatchEvent(new CustomEvent("locale-updated"));
-  } else {
-    if (cachedMessages.has(resolvedLocale)) {
-      _locale = resolvedLocale;
-      window.dispatchEvent(new CustomEvent("locale-updated"));
-    } else {
-      import(`../assets/locales/${resolvedLocale}.json`).then(({ default: localeData }) => {
-        _locale = resolvedLocale;
-        _localeData = { ...defaultLocaleData, ...localeData };
-        window.dispatchEvent(new CustomEvent("locale-updated"));
-      });
-    }
-  }
+  });
 }
 
 const interval = window.setInterval(() => {

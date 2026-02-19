@@ -1885,6 +1885,7 @@ class UIRoot extends Component {
                     debug={avatarEditorDebug}
                     avatarId={props.location.state.detail && props.location.state.detail.avatarId}
                     hideDelete={props.location.state.detail && props.location.state.detail.hideDelete}
+                    mode={props.location.state.detail && props.location.state.detail.mode}
                   />
                 )}
               />

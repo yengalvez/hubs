@@ -4,10 +4,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   min-height: 36px;
   min-width: 36px;
-  padding: 6px;
+  padding: 7px 10px;
   border: 1px solid theme.$border1-color;
   border-radius: var(--mv-radius-pill);
   background: theme.$button-bg-color;
@@ -22,14 +22,6 @@
 
   svg {
     color: theme.$text1-color;
-  }
-
-  & > * {
-    margin-right: 4px;
-
-    &:last-child {
-      margin-right: 0;
-    }
   }
 
   &:hover {

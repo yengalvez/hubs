@@ -13,7 +13,7 @@ const defaultLocaleData = {
   "app-tagline": "Private social VR in your web browser"
 };
 
-const DEFAULT_LOCALE = "en";
+const DEFAULT_LOCALE = "es";
 const cachedMessages = new Map();
 
 let _locale = DEFAULT_LOCALE;
@@ -83,9 +83,9 @@ export function setLocale(locale) {
 const interval = window.setInterval(() => {
   if (window.APP && window.APP.store) {
     window.clearInterval(interval);
-    setLocale(window.APP.store.state.preferences.locale);
+    setLocale("es");
     window.APP.store.addEventListener("statechanged", () => {
-      setLocale(window.APP.store.state.preferences.locale);
+      setLocale("es");
     });
   }
 }, 100);

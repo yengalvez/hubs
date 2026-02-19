@@ -150,7 +150,7 @@ export const SCHEMA = {
         disableEchoCancellation: { type: "bool", default: isFirefoxReality },
         disableNoiseSuppression: { type: "bool", default: isFirefoxReality },
         disableAutoGainControl: { type: "bool", default: isFirefoxReality },
-        locale: { type: "string", default: "browser" },
+        locale: { type: "string", default: "es" },
         showRtcDebugPanel: { type: "bool", default: false },
         showAudioDebugPanel: { type: "bool", default: false },
         enableAudioClipping: { type: "bool", default: false },

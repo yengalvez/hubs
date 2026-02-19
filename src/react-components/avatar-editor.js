@@ -133,7 +133,7 @@ class AvatarEditor extends Component {
         this.setState({
           baseAvatarResults,
           avatar: {
-            name: "My Avatar",
+            name: "Mi avatar",
             files: {},
             base_gltf_url: randomAvatarResult.gltfs.base,
             parent_avatar_listing_id: randomAvatarResult.id
@@ -143,7 +143,7 @@ class AvatarEditor extends Component {
       } else {
         this.setState({
           avatar: {
-            name: "My Avatar",
+            name: "Mi avatar",
             files: {}
           }
         });

@@ -55,6 +55,8 @@ export function MediaBrowser({
 
   return (
     <FullscreenLayout
+      className={styles.mediaBrowserLayout}
+      contentClassName={styles.mediaBrowserLayoutContent}
       headerLeft={
         <IconButton onClick={onClose}>
           <CloseIcon />
@@ -173,5 +175,5 @@ MediaBrowser.propTypes = {
 };
 
 MediaBrowser.defaultProps = {
-  noResultsMessage: "No Results"
+  noResultsMessage: "Sin resultados"
 };

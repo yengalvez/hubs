@@ -1,9 +1,10 @@
 @use "../styles/theme";
 
 :local(.toolbar) {
-  height: 102px;
+  min-height: 108px;
   display: flex;
   padding: 10px 12px;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
   background: transparent;
   border-top: none;
   position: relative;
@@ -19,13 +20,13 @@
   display: flex;
   flex: 1;
   justify-content: space-around;
-  align-items: center;
+  align-items: flex-end;
   gap: 0 14px;
-  min-height: 76px;
+  min-height: 82px;
   padding: 8px 12px;
   border-radius: var(--mv-radius-pill);
   border: 1px solid var(--mv-border);
-  background: rgba(11, 20, 38, 0.82);
+  background: rgba(11, 20, 38, 0.88);
   box-shadow: var(--mv-shadow-2);
   -webkit-backdrop-filter: blur(var(--mv-blur-md));
   backdrop-filter: blur(var(--mv-blur-md));
@@ -38,14 +39,16 @@
 :local(.center_content) {
   position: absolute;
   display: flex;
-  width: calc(100% - 44px);
+  width: calc(100% - 32px);
+  max-width: 860px;
   justify-content: center;
   z-index: 0;
 
   @media (max-width: theme.$breakpoint-lg) {
     width: 100%;
     position: relative;
-    justify-content: space-around;
+    justify-content: space-evenly;
     gap: unset;
+    max-width: none;
   }
 }

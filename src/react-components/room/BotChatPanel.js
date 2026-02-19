@@ -24,11 +24,11 @@ export function BotChatPanel({
   const intl = useIntl();
   const conversationsAriaLabel = intl.formatMessage({
     id: "bot-chat-panel.conversations.aria",
-    defaultMessage: "Bot conversations"
+    defaultMessage: "Conversaciones con bots"
   });
   const inputPlaceholder = intl.formatMessage({
     id: "bot-chat-panel.input-placeholder",
-    defaultMessage: "Write a private message..."
+    defaultMessage: "Escribe un mensaje privado..."
   });
 
   const conversationTabs = useMemo(() => {
@@ -66,7 +66,7 @@ export function BotChatPanel({
       title={
         <FormattedMessage
           id="bot-chat-panel.title"
-          defaultMessage="Chat with {name}"
+          defaultMessage="Chat con {name}"
           values={{ name: botName || "Bot" }}
         />
       }
@@ -89,7 +89,7 @@ export function BotChatPanel({
             const addGroupSpacing = isGroupStart && index > 0;
 
             const avatarLetter = (() => {
-              if (message.author === "user") return "Y";
+              if (message.author === "user") return "T";
               const label = (message.authorLabel || botName || "Bot").trim();
               return (label[0] || "B").toUpperCase();
             })();
@@ -152,7 +152,7 @@ export function BotChatPanel({
             <div className={styles.emptyState}>
               <FormattedMessage
                 id="bot-chat-panel.empty"
-                defaultMessage="Ask this bot something. Replies are private to you."
+                defaultMessage="Pregúntale algo a este bot. Las respuestas son privadas para ti."
               />
             </div>
           )}
@@ -176,10 +176,13 @@ export function BotChatPanel({
           />
           <div className={styles.composerFooter}>
             <div className={styles.hint}>
-              <FormattedMessage id="bot-chat-panel.hint" defaultMessage="Enter to send. Shift+Enter for a new line." />
+              <FormattedMessage
+                id="bot-chat-panel.hint"
+                defaultMessage="Enter para enviar. Shift+Enter para salto de línea."
+              />
             </div>
             <Button type="submit" preset="primary" disabled={sending || sendingDisabled || !inputValue.trim()}>
-              <FormattedMessage id="bot-chat-panel.send" defaultMessage="Send" />
+              <FormattedMessage id="bot-chat-panel.send" defaultMessage="Enviar" />
             </Button>
           </div>
         </form>

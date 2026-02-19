@@ -6,9 +6,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 64px;
+  width: 72px;
   gap: 6px;
-  justify-content: flex-start;
+  justify-content: center;
 
   label {
     cursor: pointer;
@@ -16,13 +16,14 @@
     margin: 0;
     width: 100%;
     text-align: center;
-    min-height: 24px;
+    min-height: 26px;
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: center;
     font-size: 11px;
     font-weight: 700;
-    line-height: 1.15;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
 
     &:disabled,
     &[disabled] {
@@ -39,11 +40,12 @@
 :local(.icon-container) {
   position: relative;
   border-radius: var(--mv-radius-pill);
-  width: 56px;
-  height: 56px;
+  width: 58px;
+  height: 58px;
   display: flex;
   justify-content: center;
   align-items: center;
+  margin: 0 auto;
   border: 1px solid theme.$toolbar-basic-border-color;
   background: rgba(16, 27, 50, 0.76);
   box-shadow: var(--mv-shadow-1);
@@ -53,6 +55,7 @@
   transition: transform 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
 
   svg {
+    display: block;
     color: theme.$toolbar-icon-color;
     width: 22px;
     height: 22px;
@@ -70,6 +73,17 @@
 :local(.large) :local(.icon-container) {
   width: 96px;
   height: 96px;
+}
+
+@media (max-width: theme.$breakpoint-lg - 1), (max-height: theme.$breakpoint-vr - 1) {
+  :local(.toolbar-button) {
+    width: 70px;
+  }
+
+  :local(.icon-container) {
+    width: 56px;
+    height: 56px;
+  }
 }
 
 :local(.basic),

@@ -18,7 +18,8 @@ function mergeLocaleData(localeData) {
   return { ...defaultLocaleData, ...(localeData || {}) };
 }
 
-const DEFAULT_LOCALE = "es";
+const FORCED_LOCALE = "es";
+const DEFAULT_LOCALE = FORCED_LOCALE;
 const cachedMessages = new Map();
 const cachedLocaleData = new Map();
 
@@ -86,17 +87,21 @@ function loadLocaleData(locale) {
     });
 }
 
-export function setLocale(locale) {
-  const resolvedLocale = findLocale(locale);
+export function setLocale(locale = FORCED_LOCALE) {
+  const resolvedLocale = findLocale(locale || FORCED_LOCALE);
   const requestId = ++_localeRequestId;
 
   loadLocaleData(resolvedLocale).then(localeData => {
     // Ignore stale async locale responses.
     if (requestId !== _localeRequestId) return;
 
+    const localeChanged = _locale !== resolvedLocale;
+    const localeDataChanged = _localeData !== localeData;
+    if (!localeChanged && !localeDataChanged) return;
+
     _locale = resolvedLocale;
     _localeData = localeData;
-    cachedMessages.delete(_locale);
+    cachedMessages.delete(resolvedLocale);
     window.dispatchEvent(new CustomEvent("locale-updated"));
   });
 }
@@ -104,9 +109,11 @@ export function setLocale(locale) {
 const interval = window.setInterval(() => {
   if (window.APP && window.APP.store) {
     window.clearInterval(interval);
-    setLocale("es");
+    setLocale(FORCED_LOCALE);
     window.APP.store.addEventListener("statechanged", () => {
-      setLocale("es");
+      if (_locale !== FORCED_LOCALE) {
+        setLocale(FORCED_LOCALE);
+      }
     });
   }
 }, 100);

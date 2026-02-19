@@ -9,7 +9,7 @@ import { Column } from "../layout/Column";
 export function AvaturnHelpModal({ onClose }) {
   return (
     <Modal
-      title={<FormattedMessage id="avaturn-help-modal.title" defaultMessage="Como subir tu avatar de Avaturn" />}
+      title={<FormattedMessage id="avaturn-help-modal.title" defaultMessage="Cómo subir tu avatar de Avaturn" />}
       beforeTitle={<CloseButton onClick={onClose} />}
     >
       <Column padding>
@@ -23,7 +23,7 @@ export function AvaturnHelpModal({ onClose }) {
           <li>
             <FormattedMessage
               id="avaturn-help-modal.step-1"
-              defaultMessage="Crea o abre tu avatar en Avaturn y exportalo como .glb."
+              defaultMessage="Crea o abre tu avatar en Avaturn y expórtalo como .glb."
             />
           </li>
           <li>
@@ -52,7 +52,7 @@ export function AvaturnHelpModal({ onClose }) {
           />
         </p>
         <Button as="a" href="https://docs.avaturn.me/docs" target="_blank" rel="noopener noreferrer" preset="primary">
-          <FormattedMessage id="avaturn-help-modal.link" defaultMessage="Abrir documentacion oficial de Avaturn" />
+          <FormattedMessage id="avaturn-help-modal.link" defaultMessage="Abrir documentación oficial de Avaturn" />
         </Button>
       </Column>
     </Modal>

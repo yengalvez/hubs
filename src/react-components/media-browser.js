@@ -220,7 +220,10 @@ class MediaBrowserContainer extends Component {
       });
     } else {
       newState.facets = (DEFAULT_FACETS[urlSource] || []).map(facet => ({
-        text: facet.defaultMessage,
+        text:
+          props.intl && facet.messageId
+            ? props.intl.messages?.[facet.messageId] || facet.defaultMessage
+            : facet.defaultMessage,
         params: facet.params
       }));
     }

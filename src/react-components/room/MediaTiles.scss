@@ -14,13 +14,13 @@
   position: relative;
   overflow: hidden;
   display: flex;
-  background-color: theme.$tile-bg-color;
+  background-color: rgba(17, 29, 52, 0.9);
   border: 1px solid theme.$tile-button-border-color;
-  border-radius: 12px;
+  border-radius: var(--mv-radius-md);
   box-shadow: var(--mv-shadow-1);
 
   img, video, :local(.create-tile-content) {
-    border-radius: 12px;
+    border-radius: var(--mv-radius-md);
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -75,7 +75,7 @@
 }
 
 :local(.tile-action), :local(.member-count) {
-  background: rgba(20, 34, 60, 0.94);
+  background: rgba(20, 34, 60, 0.98);
   color: theme.$tile-button-text-color;
   height: 30px;
   border-radius: 30px;
@@ -119,7 +119,7 @@
 }
 
 :local(.info) {
-  margin-top: 10px;
+  margin-top: 12px;
   color: theme.$text1-color;
 
   & > * {

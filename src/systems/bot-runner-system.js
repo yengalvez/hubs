@@ -134,9 +134,23 @@ AFRAME.registerSystem("bot-runner-system", {
 
   getServerNowMs() {
     const connection = window.NAF && window.NAF.connection;
-    if (connection && typeof connection.getServerTime === "function") {
-      return connection.getServerTime();
+    const adapter = connection && connection.adapter;
+    if (adapter && typeof adapter.getServerTime === "function") {
+      try {
+        return adapter.getServerTime();
+      } catch (e) {
+        console.warn("bot-runner-system: adapter.getServerTime failed, falling back to performance.now", e);
+      }
     }
+
+    if (connection && typeof connection.getServerTime === "function") {
+      try {
+        return connection.getServerTime();
+      } catch (e) {
+        console.warn("bot-runner-system: connection.getServerTime failed, falling back to performance.now", e);
+      }
+    }
+
     return performance.now();
   },
 

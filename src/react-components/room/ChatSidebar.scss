@@ -1,9 +1,12 @@
 @use "../styles/theme.scss";
 
 :local(.chat-input-container) {
-  padding: 8px 16px;
-  background-color: theme.$input-bg-color;
+  padding: 10px 14px 14px;
+  background: rgba(11, 21, 38, 0.62);
+  border-top: 1px solid theme.$border1-color;
   flex-basis: max-content;
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
 }
 
 :local(.message-list) {
@@ -11,9 +14,10 @@
   flex-grow: 1;
   flex-direction: column;
   list-style: none;
-  padding: 0 16px;
+  padding: 0 14px;
   overflow-y: auto;
   min-height: 0;
+  background: radial-gradient(120% 100% at 0% 0%, rgba(30, 53, 92, 0.25) 0%, rgba(8, 14, 27, 0) 60%);
 }
 
 :local(.message-group) {
@@ -21,7 +25,7 @@
   flex-direction: column;
   flex-shrink: 0;
   width: 100%;
-  padding-top: 16px;
+  padding-top: 14px;
 
   &:last-child {
     padding-bottom: 8px;
@@ -29,10 +33,10 @@
 }
 
 :local(.message-group-label) {
-  color: theme.$text2-color;
+  color: theme.$text3-color;
   font-size: theme.$font-size-xs;
   display: flex;
-  margin: 2px;
+  margin: 2px 2px 4px;
 }
 
 :local(.message-group-messages) {
@@ -48,19 +52,21 @@
 
 :local(.message-bubble) {
   background-color: theme.$chat-bubble-bg-color-received;
-  border-radius: 19px;
+  border: 1px solid theme.$border1-color;
+  border-radius: 18px;
   margin: 2px;
-  padding: 10px 16px;
-  max-width: 80%;
+  padding: 10px 14px;
+  max-width: 82%;
   width: max-content;
   font-size: theme.$font-size-md;
   overflow-wrap: break-word;
-  line-height: 1.25;
+  line-height: 1.32;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
 
   img,
   video {
     max-height: 240px;
-    border-radius: 18px;
+    border-radius: 14px;
   }
 
   a {
@@ -79,8 +85,9 @@
   }
 
   :local(.message-bubble) {
-    background-color: theme.$chat-bubble-bg-color-sent;
+    background: theme.$chat-bubble-bg-color-sent;
     color: theme.$chat-bubble-text-color-sent;
+    border-color: rgba(121, 193, 255, 0.45);
     align-self: flex-end;
 
     a {
@@ -101,6 +108,8 @@
 :local(.message-bubble):local(.media) {
   font-size: 32px;
   background-color: theme.$transparent;
+  border-color: transparent;
+  box-shadow: none;
   padding: 0;
 }
 
@@ -125,7 +134,7 @@
 :local(.message-bubble):local(.permission) {
   display: flex;
   gap: 10px;
-  background-color: theme.$transparent;
+  background-color: rgba(14, 25, 46, 0.7);
   border: 1px solid theme.$input-border-color;
   color: theme.$text1-color;
   align-items: center;
@@ -153,7 +162,7 @@
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  border-radius: 18px;
+  border-radius: 16px;
   background-color: transparent;
 
   &:hover {

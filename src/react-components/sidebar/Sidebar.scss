@@ -5,45 +5,62 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: theme.$background1-color;
+  background: linear-gradient(180deg, rgba(13, 24, 44, 0.975) 0%, rgba(10, 18, 34, 0.985) 100%);
   pointer-events: auto;
   overflow-wrap: break-word;
-  
-  @media(min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
-    border-left: 1px solid theme.$border1-color;
-  }
+  border: 1px solid theme.$border1-color;
+  border-radius: var(--mv-radius-lg);
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
+  box-shadow: var(--mv-shadow-2);
 }
 
 :local(.header) {
   display: flex;
-  height: 48px;
+  height: 60px;
   flex-shrink: 0;
   border-bottom: 1px solid theme.$border1-color;
   align-items: center;
   justify-content: center;
+  background: rgba(16, 29, 52, 0.95);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 :local(.before-title) {
   position: absolute;
   left: 0;
-  margin-left: 16px;
+  margin-left: 14px;
 }
 
 :local(.after-title) {
   position: absolute;
   right: 0;
-  margin-right: 16px;
+  margin-right: 14px;
 }
 
 :local(.content) {
   position: absolute;
-  top: 48px;
+  top: 60px;
   left: 0;
   right: 0;
   bottom: 0;
   display: flex;
   flex: 1;
   flex-direction: column;
+  padding: 12px;
+}
+
+@media (max-width: theme.$breakpoint-lg - 1), (max-height: theme.$breakpoint-vr - 1) {
+  :local(.sidebar) {
+    border-radius: var(--mv-radius-md);
+  }
+
+  :local(.content) {
+    padding: 10px;
+  }
 }
 
 :local(.overflow-y) {

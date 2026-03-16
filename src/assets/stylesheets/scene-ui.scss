@@ -9,7 +9,7 @@
   left: 0;
   position: absolute;
   pointer-events: none;
-  color: white;
+  color: theme.$text1-color;
 }
 
 :local(.grid) {
@@ -17,6 +17,7 @@
   grid-template-rows: 10vh 69vh 1fr;
   width: 100%;
   height: 100%;
+
   @media (min-height: theme.$breakpoint-vr) {
     grid-template-rows: 17vh 69vh 1fr;
   }
@@ -35,7 +36,7 @@
 
 :local(.logoTagline) {
   color: theme.$text1-color;
-  text-shadow: 0px 0px 10px theme.$text-inverted-color;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.48);
   font-weight: bold;
   text-align: center;
   display: flex;
@@ -44,15 +45,15 @@
   margin: 30px 0;
 }
 
-
 :local(.logo) {
   width: clamp(200px, 100%, 17vw);
   display: block;
-  filter: drop-shadow(0 0 4px theme.$text-inverted-color);
+  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.46));
 
   img {
     width: 100%;
   }
+
   svg {
     width: clamp(200px, 100%, 17vw);
     height: clamp(200px, 100%, 17vh);
@@ -62,13 +63,14 @@
 :local(.info) {
   grid-row: 3;
   color: theme.$text1-color;
-  text-shadow: 0px 0px 10px theme.$text-inverted-color;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.48);
   display: flex;
   flex-direction: column;
   align-items: center;
   align-self: center;
   text-align: center;
   z-index: 0;
+
   @media (min-width: theme.$breakpoint-lg) {
     align-items: flex-start;
     align-self: left;
@@ -83,7 +85,7 @@
 }
 
 :local(.attribution) {
-  font-size: 1.0em;
+  font-size: 1em;
   white-space: normal;
 
   .remix {
@@ -132,26 +134,30 @@
   @extend %action-button;
   display: flex;
   flex-direction: row;
-  border: 1px solid #007AB8;
-  background-color: #007AB8;
+  border: 1px solid rgba(130, 201, 255, 0.45);
+  background: linear-gradient(130deg, var(--mv-accent-1) 0%, var(--mv-accent-2) 100%);
   color: theme.$text5-color;
   box-sizing: border-box;
-  border-radius: 13px;
-  margin: .5rem 0 .5rem 0;
+  border-radius: var(--mv-radius-md);
+  margin: 0.5rem 0;
   white-space: nowrap;
+
   svg {
     margin-right: 8px;
     color: theme.$text5-color;
   }
+
   &:hover {
-    background-color: #008bd1;
+    background: linear-gradient(130deg, #3ad7ff 0%, #5f93ff 100%);
     color: theme.$text5-color;
+
     svg {
-      color: theme.$text5-color
+      color: theme.$text5-color;
     }
   }
+
   &:active {
-    background-color: #00699E;
+    background: linear-gradient(130deg, #1eb2de 0%, #2f64e7 100%);
   }
 }
 
@@ -162,7 +168,6 @@
   justify-content: center;
   height: 100%;
 }
-
 
 :local(.attribution) {
   & > * {

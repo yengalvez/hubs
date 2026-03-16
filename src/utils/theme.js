@@ -148,8 +148,7 @@ function updateTextButtonColors() {
 }
 
 function applyThemeToBody() {
-  const theme = getCurrentTheme();
-  document.body.setAttribute("data-theme", theme.name.toLowerCase().includes("dark") ? "dark" : "light");
+  document.body.setAttribute("data-theme", "dark");
 }
 
 function onThemeChanged(listener) {
@@ -169,13 +168,8 @@ waitForDOMContentLoaded().then(() => {
     return;
   }
 
-  // Set initial theme
-  const theme = getCurrentTheme();
-  if (theme && theme.name.toLowerCase().includes("dark")) {
-    document.body.setAttribute("data-theme", "dark");
-  } else {
-    document.body.setAttribute("data-theme", "light");
-  }
+  // Force the metaverse dark look across the full user-facing client UI.
+  document.body.setAttribute("data-theme", "dark");
 
   updateTextButtonColors();
   onThemeChanged(() => {

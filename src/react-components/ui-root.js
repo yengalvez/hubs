@@ -54,6 +54,7 @@ import { ChatSidebarContainer } from "./room/ChatSidebarContainer";
 import { ContentMenu, PeopleMenuButton, ObjectsMenuButton, ECSDebugMenuButton } from "./room/ContentMenu";
 import { ReactComponent as CameraIcon } from "./icons/Camera.svg";
 import { ReactComponent as AvatarIcon } from "./icons/Avatar.svg";
+import { ReactComponent as ChatIcon } from "./icons/Chat.svg";
 import { ReactComponent as AddIcon } from "./icons/Add.svg";
 import { ReactComponent as DeleteIcon } from "./icons/Delete.svg";
 import { ReactComponent as FavoritesIcon } from "./icons/Favorites.svg";
@@ -86,6 +87,7 @@ import { SignInStep } from "./auth/SignInModal";
 import { LeaveReason, LeaveRoomModal } from "./room/LeaveRoomModal";
 import { RoomSidebar } from "./room/RoomSidebar";
 import { RoomSettingsSidebarContainer } from "./room/RoomSettingsSidebarContainer";
+import { BotChatPanelContainer } from "./room/BotChatPanelContainer";
 import { AutoExitWarningModal, AutoExitReason } from "./room/AutoExitWarningModal";
 import { ExitReason } from "./room/ExitedRoomScreen";
 import { UserProfileSidebarContainer } from "./room/UserProfileSidebarContainer";
@@ -116,6 +118,55 @@ import { findAncestorWithComponent, shouldUseNewLoader } from "../utils/bit-util
 const avatarEditorDebug = qsTruthy("avatarEditorDebug");
 
 const IN_ROOM_MODAL_ROUTER_PATHS = ["/media"];
+
+function getBuildVersionInfo() {
+  const raw = (process.env.BUILD_VERSION || "").trim();
+  if (raw) {
+    const match = raw.match(/\(([0-9a-f]{7,40})\)/i) || raw.match(/([0-9a-f]{7,40})/i);
+    const short = match ? match[1].slice(0, 7) : raw.slice(0, 12);
+    return { short, full: raw };
+  }
+
+  if (typeof document !== "undefined") {
+    const scripts = Array.from(document.querySelectorAll("script[src]"));
+
+    // Prefer the main app bundle hash, not ancillary bundles like webxr-polyfill.
+    // This is intentionally strict (hub bundle first) so the toolbar version reliably reflects client changes.
+    for (const script of scripts) {
+      const src = script.getAttribute("src") || "";
+      const match =
+        src.match(/(?:^|\/)hubs\/assets\/js\/hub-([0-9a-f]{8,})\.js/i) ||
+        src.match(/assets\/js\/hub-([0-9a-f]{8,})\.js/i);
+      if (match) {
+        const hash = match[1];
+        return { short: hash.slice(0, 8), full: hash };
+      }
+    }
+
+    // Secondary: frontend bundle (UI shell) then engine bundle.
+    for (const script of scripts) {
+      const src = script.getAttribute("src") || "";
+      const match =
+        src.match(/assets\/js\/frontend-([0-9a-f]{8,})\.js/i) || src.match(/assets\/js\/engine-([0-9a-f]{8,})\.js/i);
+      if (match) {
+        const hash = match[1];
+        return { short: hash.slice(0, 8), full: hash };
+      }
+    }
+
+    // Fallback: first hashed JS bundle on the page.
+    for (const script of scripts) {
+      const src = script.getAttribute("src") || "";
+      const match = src.match(/assets\/js\/[^/]+-([0-9a-f]{8,})\.js/i);
+      if (match) {
+        const hash = match[1];
+        return { short: hash.slice(0, 8), full: hash };
+      }
+    }
+  }
+
+  return { short: "?", full: "" };
+}
 const IN_ROOM_MODAL_QUERY_VARS = ["media_source"];
 
 const LOBBY_MODAL_ROUTER_PATHS = ["/media/scenes", "/media/avatars", "/media/favorites"];
@@ -222,7 +273,10 @@ class UIRoot extends Component {
     sidebarId: null,
     presenceCount: 0,
     chatPrefix: "",
-    chatAutofocus: false
+    chatAutofocus: false,
+    nearestBot: null,
+    selectedBotForChat: null,
+    botChatSessions: {}
   };
 
   constructor(props) {
@@ -297,6 +351,18 @@ class UIRoot extends Component {
 
     if (this.state.presenceCount != this.occupantCount()) {
       this.setState({ presenceCount: this.occupantCount() });
+    }
+
+    const prevHubSid = prevProps.hub?.hub_id;
+    const nextHubSid = this.props.hub?.hub_id;
+    if (prevHubSid !== nextHubSid && Object.keys(this.state.botChatSessions).length) {
+      // Session-only bot chat history: keep it while in the room, but drop it once we leave/switch rooms.
+      this.setState({
+        botChatSessions: {},
+        selectedBotForChat: null,
+        nearestBot: null,
+        sidebarId: this.state.sidebarId === "bot-chat" ? null : this.state.sidebarId
+      });
     }
   }
 
@@ -415,6 +481,9 @@ class UIRoot extends Component {
     this.playerRig = scene.querySelector("#avatar-rig");
     this._sittingTmpRigPos = new THREE.Vector3();
     this._sittingTmpWaypointPos = new THREE.Vector3();
+    this._botTmpRigPos = new THREE.Vector3();
+    this._botTmpBotPos = new THREE.Vector3();
+    this._botProximityInterval = window.setInterval(this.refreshNearestBot, 1000);
 
     scene.addEventListener("action_media_tweet", this.onTweet);
   }
@@ -436,6 +505,10 @@ class UIRoot extends Component {
     window.removeEventListener("idle_detected", this.onIdleDetected);
     window.removeEventListener("activity_detected", this.onActivityDetected);
     window.removeEventListener("focus_chat", this.onFocusChat);
+    if (this._botProximityInterval) {
+      clearInterval(this._botProximityInterval);
+      this._botProximityInterval = null;
+    }
   }
 
   storeUpdated = () => {
@@ -922,6 +995,191 @@ class UIRoot extends Component {
     }
   };
 
+  getRoomBotsConfig = () => {
+    const bots = this.props.hub?.user_data?.bots || {};
+
+    const enabled = !!(bots.enabled || bots["enabled"]);
+    const chatEnabled = !!(bots.chat_enabled || bots["chat_enabled"]);
+    const count = Number(bots.count || bots["count"] || 0) || 0;
+
+    return {
+      enabled,
+      chatEnabled,
+      count
+    };
+  };
+
+  isBotChatEnabled = () => {
+    const roomBotsFeatureEnabled = !!configs.feature("enable_room_bots");
+    const botChatFeatureEnabled = !!configs.feature("enable_bot_chat");
+    const botsConfig = this.getRoomBotsConfig();
+
+    return roomBotsFeatureEnabled && botChatFeatureEnabled && botsConfig.enabled && botsConfig.chatEnabled;
+  };
+
+  refreshNearestBot = () => {
+    if (!this.playerRig?.object3D) return;
+    if (!this.props.scene?.is("entered") || !this.isBotChatEnabled()) {
+      if (this.state.nearestBot) {
+        this.setState({ nearestBot: null });
+      }
+      return;
+    }
+
+    this.playerRig.object3D.getWorldPosition(this._botTmpRigPos);
+    const botEls = this.props.scene.querySelectorAll("[bot-info]");
+
+    let nearest = null;
+    for (let i = 0; i < botEls.length; i++) {
+      const botEl = botEls[i];
+      if (!botEl.object3D) continue;
+
+      // Bot visual smoothing happens on the `.model` child; use it if present so proximity feels stable.
+      const smoothEl = botEl.querySelector ? botEl.querySelector(".model") : null;
+      const targetObj3D = smoothEl && smoothEl.object3D ? smoothEl.object3D : botEl.object3D;
+      targetObj3D.getWorldPosition(this._botTmpBotPos);
+      const distSq = this._botTmpRigPos.distanceToSquared(this._botTmpBotPos);
+
+      if (!nearest || distSq < nearest.distSq) {
+        const botInfo = botEl.components?.["bot-info"]?.data || {};
+        nearest = {
+          botId: botInfo.botId || `bot-${i + 1}`,
+          botName: botInfo.displayName || "Bot",
+          distSq
+        };
+      }
+    }
+
+    // Require proximity for showing Talk.
+    if (nearest && nearest.distSq > 9) {
+      nearest = null;
+    }
+
+    const prevBotId = this.state.nearestBot?.botId;
+    const nextBotId = nearest?.botId;
+    if (prevBotId !== nextBotId) {
+      this.setState({ nearestBot: nearest });
+    }
+  };
+
+  openBotChat = () => {
+    const nearestBot = this.state.nearestBot;
+    if (!nearestBot) return;
+
+    const hubSid = this.props.hub?.hub_id;
+    const botId = nearestBot.botId;
+    const key = hubSid && botId ? `${hubSid}:${botId}` : null;
+
+    let botChatSessions = this.state.botChatSessions;
+    if (key) {
+      const existing = botChatSessions[key];
+      if (!existing) {
+        botChatSessions = {
+          ...botChatSessions,
+          [key]: { botId, botName: nearestBot.botName || botId, messages: [], draft: "" }
+        };
+      } else if (nearestBot.botName && existing.botName !== nearestBot.botName) {
+        botChatSessions = {
+          ...botChatSessions,
+          [key]: { ...existing, botName: nearestBot.botName }
+        };
+      }
+    }
+
+    this.setSidebar("bot-chat", {
+      selectedBotForChat: nearestBot,
+      botChatSessions
+    });
+  };
+
+  getBotChatSessionKey = botId => {
+    const hubSid = this.props.hub?.hub_id;
+    if (!hubSid || !botId) return null;
+    return `${hubSid}:${botId}`;
+  };
+
+  getBotChatConversations = () => {
+    const hubSid = this.props.hub?.hub_id;
+    if (!hubSid) return [];
+
+    const prefix = `${hubSid}:`;
+    const out = [];
+    for (const [key, session] of Object.entries(this.state.botChatSessions || {})) {
+      if (!key.startsWith(prefix) || !session) continue;
+
+      const messages = session.messages || [];
+      const last = messages.length ? messages[messages.length - 1] : null;
+      const lastTs = last && typeof last.ts === "number" ? last.ts : 0;
+
+      out.push({
+        botId: session.botId,
+        botName: session.botName || session.botId,
+        lastTs
+      });
+    }
+
+    out.sort((a, b) => {
+      if (b.lastTs !== a.lastTs) return b.lastTs - a.lastTs;
+      return String(a.botId || "").localeCompare(String(b.botId || ""));
+    });
+
+    return out;
+  };
+
+  selectBotChatConversation = botId => {
+    const key = this.getBotChatSessionKey(botId);
+    const session = key && this.state.botChatSessions[key];
+    if (!session) return;
+
+    const selectedBotForChat = { botId: session.botId, botName: session.botName || session.botId };
+
+    if (this.state.sidebarId === "bot-chat") {
+      this.setState({ selectedBotForChat });
+    } else {
+      this.setSidebar("bot-chat", { selectedBotForChat });
+    }
+  };
+
+  appendBotChatMessage = (botId, botName, message) => {
+    const key = this.getBotChatSessionKey(botId);
+    if (!key) return;
+
+    this.setState(prevState => {
+      const existing = prevState.botChatSessions[key] || { botId, botName: botName || botId, messages: [], draft: "" };
+      const updated = {
+        ...existing,
+        botName: botName || existing.botName || botId,
+        messages: [...(existing.messages || []), message]
+      };
+      return {
+        botChatSessions: {
+          ...prevState.botChatSessions,
+          [key]: updated
+        }
+      };
+    });
+  };
+
+  setBotChatDraft = (botId, botName, draft) => {
+    const key = this.getBotChatSessionKey(botId);
+    if (!key) return;
+
+    this.setState(prevState => {
+      const existing = prevState.botChatSessions[key] || { botId, botName: botName || botId, messages: [], draft: "" };
+      const updated = {
+        ...existing,
+        botName: botName || existing.botName || botId,
+        draft
+      };
+      return {
+        botChatSessions: {
+          ...prevState.botChatSessions,
+          [key]: updated
+        }
+      };
+    });
+  };
+
   renderDialog = (DialogClass, props = {}) => <DialogClass {...{ onClose: this.closeDialog, ...props }} />;
 
   signOut = async () => {
@@ -949,7 +1207,17 @@ class UIRoot extends Component {
   };
 
   occupantCount = () => {
-    return this.props.presences ? Object.entries(this.props.presences).length : 0;
+    const presences = this.props.presences;
+    if (!presences) return 0;
+
+    let count = 0;
+    for (const presence of Object.values(presences)) {
+      const meta = presence && presence.metas && presence.metas[presence.metas.length - 1];
+      if (meta && meta.context && meta.context.bot_runner) continue;
+      count += 1;
+    }
+
+    return count;
   };
 
   hasEmbedPresence = () => {
@@ -998,7 +1266,14 @@ class UIRoot extends Component {
   pushHistoryState = (k, v) => pushHistoryState(this.props.history, k, v);
 
   setSidebar(sidebarId, otherState) {
-    this.setState({ sidebarId, chatPrefix: "", chatAutofocus: false, selectedUserId: null, ...(otherState || {}) });
+    this.setState({
+      sidebarId,
+      chatPrefix: "",
+      chatAutofocus: false,
+      selectedUserId: null,
+      selectedBotForChat: null,
+      ...(otherState || {})
+    });
   }
 
   toggleSidebar(sidebarId, otherState) {
@@ -1008,6 +1283,7 @@ class UIRoot extends Component {
       return {
         sidebarId: nextSidebarId,
         selectedUserId: null,
+        selectedBotForChat: null,
         ...otherState
       };
     });
@@ -1273,7 +1549,17 @@ class UIRoot extends Component {
     const showRtcDebugPanel = this.props.store.state.preferences.showRtcDebugPanel;
     const showAudioDebugPanel = this.props.store.state.preferences.showAudioDebugPanel;
     const thirdPersonEnabled = this.props.store.state.preferences.enableThirdPersonView;
+    const botChatEnabled = this.isBotChatEnabled();
+    const nearestBot = this.state.nearestBot;
+    const canTalkToBot = !!(botChatEnabled && nearestBot);
+    const botChatConversations = botChatEnabled ? this.getBotChatConversations() : [];
+    const activeBotChatId = this.state.selectedBotForChat?.botId || null;
+    const activeBotChatKey = activeBotChatId ? this.getBotChatSessionKey(activeBotChatId) : null;
+    const activeBotChatSession = activeBotChatKey ? this.state.botChatSessions[activeBotChatKey] : null;
+    const activeBotChatMessages = (activeBotChatSession && activeBotChatSession.messages) || [];
+    const activeBotChatDraft = (activeBotChatSession && activeBotChatSession.draft) || "";
     const inVrMode = this.props.scene?.is("vr-mode");
+    const buildVersionInfo = enteredOrWatching ? getBuildVersionInfo() : null;
     const displayNameOverride = this.props.hubIsBound
       ? getPresenceProfileForSession(this.props.presences, this.props.sessionId).displayName
       : null;
@@ -1599,6 +1885,7 @@ class UIRoot extends Component {
                     debug={avatarEditorDebug}
                     avatarId={props.location.state.detail && props.location.state.detail.avatarId}
                     hideDelete={props.location.state.detail && props.location.state.detail.hideDelete}
+                    mode={props.location.state.detail && props.location.state.detail.mode}
                   />
                 )}
               />
@@ -1809,6 +2096,36 @@ class UIRoot extends Component {
                           onChangeScene={this.onChangeScene}
                         />
                       )}
+                      {this.state.sidebarId === "bot-chat" && this.state.selectedBotForChat && (
+                        <BotChatPanelContainer
+                          scene={this.props.scene}
+                          hubChannel={this.props.hubChannel}
+                          hubSid={this.props.hub?.hub_id}
+                          botId={this.state.selectedBotForChat.botId}
+                          botName={this.state.selectedBotForChat.botName}
+                          messages={activeBotChatMessages}
+                          inputValue={activeBotChatDraft}
+                          sendingDisabled={!botChatEnabled}
+                          conversations={botChatConversations}
+                          activeBotId={activeBotChatId}
+                          onSelectConversation={this.selectBotChatConversation}
+                          onInputChange={value =>
+                            this.setBotChatDraft(
+                              this.state.selectedBotForChat.botId,
+                              this.state.selectedBotForChat.botName,
+                              value
+                            )
+                          }
+                          onAppendMessage={message =>
+                            this.appendBotChatMessage(
+                              this.state.selectedBotForChat.botId,
+                              this.state.selectedBotForChat.botName,
+                              message
+                            )
+                          }
+                          onClose={() => this.setSidebar(null)}
+                        />
+                      )}
                       {this.state.sidebarId === "ecs-debug" && (
                         <ECSDebugSidebarContainer onClose={() => this.setSidebar(null)} />
                       )}
@@ -1893,6 +2210,16 @@ class UIRoot extends Component {
                               selected={this.state.isSitting}
                               onClick={this.toggleSitting}
                             />
+                            {botChatEnabled && (
+                              <ToolbarButton
+                                icon={<ChatIcon />}
+                                label={<FormattedMessage id="toolbar.bot-talk-button" defaultMessage="Talk" />}
+                                preset="basic"
+                                selected={this.state.sidebarId === "bot-chat"}
+                                disabled={!canTalkToBot}
+                                onClick={this.openBotChat}
+                              />
+                            )}
                           </>
                         )}
                       </>
@@ -1922,6 +2249,15 @@ class UIRoot extends Component {
                         preset="accept"
                         label={<FormattedMessage id="toolbar.enter-vr-button" defaultMessage="Enter VR" />}
                         onClick={() => exit2DInterstitialAndEnterVR(true)}
+                      />
+                    )}
+                    {entered && buildVersionInfo && (
+                      <ToolbarButton
+                        preset="transparent"
+                        disabled
+                        icon={null}
+                        label={<span style={{ fontFamily: "monospace", fontSize: 12 }}>{buildVersionInfo.short}</span>}
+                        title={buildVersionInfo.full ? `Build ${buildVersionInfo.full}` : "Build version unavailable"}
                       />
                     )}
                     {entered && (

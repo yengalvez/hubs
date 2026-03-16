@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { FormattedMessage, useIntl } from "react-intl";
 import classNames from "classnames";
 import configs from "../../utils/configs";
@@ -20,6 +20,7 @@ import { SignInButton } from "./SignInButton";
 import { AppLogo } from "../misc/AppLogo";
 import { isHmc } from "../../utils/isHmc";
 import maskEmail from "../../utils/mask-email";
+import homeHeroBackground from "../../assets/images/home-hero-background-unbranded.png";
 
 export function HomePage() {
   const auth = useContext(AuthContext);
@@ -53,6 +54,15 @@ export function HomePage() {
 
   const canCreateRooms = !configs.feature("disable_room_creation") || auth.isAdmin;
   const email = auth.email;
+  const configuredHeroImage = configs.image("home_background");
+  const [heroImageSrc, setHeroImageSrc] = useState(configuredHeroImage || homeHeroBackground);
+  const [heroImageHidden, setHeroImageHidden] = useState(false);
+
+  useEffect(() => {
+    setHeroImageSrc(configuredHeroImage || homeHeroBackground);
+    setHeroImageHidden(false);
+  }, [configuredHeroImage]);
+
   return (
     <PageContainer className={styles.homePage}>
       <Container>
@@ -82,16 +92,27 @@ export function HomePage() {
             <PWAButton />
           </div>
           <div className={styles.heroImageContainer}>
-            <img
-              alt={intl.formatMessage(
-                {
-                  id: "home-page.hero-image-alt",
-                  defaultMessage: "Screenshot of {appName}"
-                },
-                { appName: configs.translation("app-name") }
-              )}
-              src={configs.image("home_background")}
-            />
+            {heroImageHidden ? (
+              <div className={styles.heroImageFallback} aria-hidden="true" />
+            ) : (
+              <img
+                alt={intl.formatMessage(
+                  {
+                    id: "home-page.hero-image-alt",
+                    defaultMessage: "Screenshot of {appName}"
+                  },
+                  { appName: configs.translation("app-name") }
+                )}
+                src={heroImageSrc}
+                onError={() => {
+                  if (heroImageSrc !== homeHeroBackground) {
+                    setHeroImageSrc(homeHeroBackground);
+                    return;
+                  }
+                  setHeroImageHidden(true);
+                }}
+              />
+            )}
           </div>
         </div>
       </Container>

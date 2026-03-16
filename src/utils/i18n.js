@@ -1,23 +1,32 @@
 import configs from "./configs";
 import { AVAILABLE_LOCALES, FALLBACK_LOCALES } from "../assets/locales/locale_config";
+import defaultSpanishLocaleData from "../assets/locales/es.json";
 
 // These are set in the admin panel and are only included as fallbacks.
 const defaultLocaleData = {
   "app-name": location.hostname,
-  "editor-name": "Scene Editor",
+  "editor-name": "Editor de Escenas",
   "contact-email": "app@company.com",
-  "company-name": "Company",
+  "company-name": "Comunidad",
   "share-hashtag": "#app",
   // what you can do here
-  "app-description": "Gather, share, and collaborate together in a virtual, private, and safe space.",
-  "app-tagline": "Private social VR in your web browser"
+  "app-description": "Reúnete, comparte y colabora en un espacio virtual privado y seguro.",
+  "app-tagline": "VR social privada en tu navegador"
 };
 
-const DEFAULT_LOCALE = "en";
+function mergeLocaleData(localeData) {
+  return { ...defaultLocaleData, ...(localeData || {}) };
+}
+
+const FORCED_LOCALE = "es";
+const DEFAULT_LOCALE = FORCED_LOCALE;
 const cachedMessages = new Map();
+const cachedLocaleData = new Map();
 
 let _locale = DEFAULT_LOCALE;
-let _localeData = defaultLocaleData;
+cachedLocaleData.set(DEFAULT_LOCALE, mergeLocaleData(defaultSpanishLocaleData));
+let _localeData = cachedLocaleData.get(DEFAULT_LOCALE);
+let _localeRequestId = 0;
 
 function findLocale(locale) {
   const locales = (() => {
@@ -42,7 +51,7 @@ function findLocale(locale) {
       return curLocale;
     }
     if (Object.prototype.hasOwnProperty.call(FALLBACK_LOCALES, curLocale)) {
-      Object.prototype.hasOwnProperty.call(FALLBACK_LOCALES, curLocale);
+      return FALLBACK_LOCALES[curLocale];
     }
     // Also check the primary language subtag in case
     // we do not have an entry for full tag
@@ -59,33 +68,52 @@ function findLocale(locale) {
   return DEFAULT_LOCALE;
 }
 
-export function setLocale(locale) {
-  const resolvedLocale = findLocale(locale);
-
-  if (resolvedLocale === DEFAULT_LOCALE) {
-    _locale = resolvedLocale;
-    _localeData = defaultLocaleData;
-    window.dispatchEvent(new CustomEvent("locale-updated"));
-  } else {
-    if (cachedMessages.has(resolvedLocale)) {
-      _locale = resolvedLocale;
-      window.dispatchEvent(new CustomEvent("locale-updated"));
-    } else {
-      import(`../assets/locales/${resolvedLocale}.json`).then(({ default: localeData }) => {
-        _locale = resolvedLocale;
-        _localeData = { ...defaultLocaleData, ...localeData };
-        window.dispatchEvent(new CustomEvent("locale-updated"));
-      });
-    }
+function loadLocaleData(locale) {
+  if (cachedLocaleData.has(locale)) {
+    return Promise.resolve(cachedLocaleData.get(locale));
   }
+
+  return import(`../assets/locales/${locale}.json`)
+    .then(({ default: localeData }) => {
+      const mergedLocaleData = mergeLocaleData(localeData);
+      cachedLocaleData.set(locale, mergedLocaleData);
+      return mergedLocaleData;
+    })
+    .catch(error => {
+      console.warn(`Failed loading locale "${locale}", falling back to defaults.`, error);
+      const fallbackLocaleData = mergeLocaleData(defaultSpanishLocaleData);
+      cachedLocaleData.set(locale, fallbackLocaleData);
+      return fallbackLocaleData;
+    });
+}
+
+export function setLocale() {
+  const resolvedLocale = findLocale(FORCED_LOCALE);
+  const requestId = ++_localeRequestId;
+
+  loadLocaleData(resolvedLocale).then(localeData => {
+    // Ignore stale async locale responses.
+    if (requestId !== _localeRequestId) return;
+
+    const localeChanged = _locale !== resolvedLocale;
+    const localeDataChanged = _localeData !== localeData;
+    if (!localeChanged && !localeDataChanged) return;
+
+    _locale = resolvedLocale;
+    _localeData = localeData;
+    cachedMessages.delete(resolvedLocale);
+    window.dispatchEvent(new CustomEvent("locale-updated"));
+  });
 }
 
 const interval = window.setInterval(() => {
   if (window.APP && window.APP.store) {
     window.clearInterval(interval);
-    setLocale(window.APP.store.state.preferences.locale);
+    setLocale(FORCED_LOCALE);
     window.APP.store.addEventListener("statechanged", () => {
-      setLocale(window.APP.store.state.preferences.locale);
+      if (_locale !== FORCED_LOCALE) {
+        setLocale(FORCED_LOCALE);
+      }
     });
   }
 }, 100);

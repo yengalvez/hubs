@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import configs from "../../utils/configs";
-import { tryGetTheme, getCurrentTheme, registerDarkModeQuery } from "../../utils/theme";
+import { registerDarkModeQuery } from "../../utils/theme";
 
 function useDarkMode() {
   const [darkMode, setDarkMode] = useState(false);
@@ -28,42 +28,17 @@ export function useTheme(themeId) {
   const darkMode = useDarkMode();
 
   useEffect(() => {
-    const theme = tryGetTheme(themeId);
-
-    if (!theme) {
-      return;
-    }
-
-    const variables = [];
-
-    for (const key in theme.variables) {
-      if (!Object.prototype.hasOwnProperty.call(theme.variables, key)) continue;
-      variables.push(`--${key}: ${theme.variables[key]};`);
-    }
-
-    const styleTag = document.createElement("style");
-
-    styleTag.innerHTML = `:root {
-        ${variables.join("\n")}
-      }`;
-
-    document.head.appendChild(styleTag);
-
-    return () => {
-      document.head.removeChild(styleTag);
-    };
+    // Custom theme variable injection is disabled so the metaverse glass theme stays consistent.
+    document.body.setAttribute("data-theme", "dark");
   }, [themeId, darkMode]);
 }
 
-function getAppLogo(darkMode) {
-  const theme = getCurrentTheme();
-  const shouldUseDarkLogo = theme ? theme.darkModeDefault || theme.id.includes("dark-mode") : darkMode;
-  return (shouldUseDarkLogo && configs.image("logo_dark")) || configs.image("logo");
+function getAppLogo() {
+  return configs.image("logo_dark") || configs.image("logo");
 }
 
 export function useLogo() {
-  const darkMode = useDarkMode();
-  return getAppLogo(darkMode);
+  return getAppLogo();
 }
 
 export function useThemeFromStore(store) {

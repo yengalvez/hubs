@@ -1,7 +1,11 @@
 @use "../../react-components/styles/theme.scss";
 
 :local(.hero) {
-  background-color: theme.$background2-color;
+  background-color: rgba(12, 20, 38, 0.72);
+  border-bottom: 1px solid theme.$border1-color;
+  box-shadow: var(--mv-shadow-2);
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
 
   h1 {
     margin-bottom: 20px;
@@ -9,10 +13,11 @@
 
   iframe {
     margin-bottom: 20px;
+    border-radius: var(--mv-radius-md);
   }
 
   & > section {
-    display: flex; 
+    display: flex;
     padding: 32px;
   }
 }
@@ -24,20 +29,20 @@
     height: 240px;
     width: 100%;
 
-    @media(min-width: theme.$breakpoint-sm) {
+    @media (min-width: theme.$breakpoint-sm) {
       height: 300px;
     }
 
-    @media(min-width: theme.$breakpoint-md) {
+    @media (min-width: theme.$breakpoint-md) {
       height: 360px;
     }
 
-    @media(min-width: theme.$breakpoint-lg) {
+    @media (min-width: theme.$breakpoint-lg) {
       height: 100%;
     }
   }
 
-  @media(min-width: theme.$breakpoint-lg) {
+  @media (min-width: theme.$breakpoint-lg) {
     margin-right: 40px;
   }
 }
@@ -57,7 +62,7 @@
 :local(.features) {
   display: flex;
   padding: 5px;
-  
+
   & > * {
     margin: theme.$spacing-md;
   }
@@ -66,22 +71,21 @@
     & > * {
       margin-bottom: theme.$spacing-md;
     }
-  
+
     & > :last-child {
       margin-bottom: 0;
     }
   }
 }
 
-// Utility Classes
 :local(.hide-lg-down) {
-  @media(max-width: theme.$breakpoint-lg) {
+  @media (max-width: theme.$breakpoint-lg) {
     display: none;
   }
 }
 
 :local(.hide-lg-up) {
-  @media(min-width: theme.$breakpoint-lg) {
+  @media (min-width: theme.$breakpoint-lg) {
     display: none;
   }
 }
@@ -98,7 +102,7 @@
 :local(.col-lg) {
   flex-direction: column;
 
-  @media(min-width: theme.$breakpoint-lg) {
+  @media (min-width: theme.$breakpoint-lg) {
     flex-direction: row;
   }
 }
@@ -111,7 +115,7 @@
 }
 
 :local(.center-lg) {
-  @media(max-width: theme.$breakpoint-lg) {
+  @media (max-width: theme.$breakpoint-lg) {
     text-align: center;
     align-items: center;
   }

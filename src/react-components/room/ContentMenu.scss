@@ -2,16 +2,19 @@
 
 :local(.content-menu) {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  right: 10px;
   display: flex;
   flex-direction: row;
-  background-color: theme.$button-bg-color;
+  background: rgba(12, 20, 38, 0.72);
   border: 1px solid theme.$button-border-color;
-  border-radius: 12px;
+  border-radius: var(--mv-radius-md);
   pointer-events: auto;
   padding: 4px;
   color: theme.$text1-color;
+  box-shadow: var(--mv-shadow-1);
+  -webkit-backdrop-filter: blur(var(--mv-blur-sm));
+  backdrop-filter: blur(var(--mv-blur-sm));
 
   @media (min-width: theme.$breakpoint-lg) {
     top: 24px;
@@ -23,7 +26,7 @@
   display: flex;
   flex-direction: row;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--mv-radius-sm);
   background-color: theme.$transparent;
   font-size: theme.$font-size-xs;
   font-weight: theme.$font-weight-bold;
@@ -53,18 +56,18 @@
 
 :local(.active) {
   color: theme.$text5-color;
-  background-color: theme.$active-color;
+  background: linear-gradient(130deg, rgba(38, 209, 255, 0.2) 0%, rgba(63, 123, 255, 0.35) 100%);
 
   svg {
     color: theme.$text5-color;
   }
 
   &:hover {
-    background-color: theme.$active-color-hover;
+    background: linear-gradient(130deg, rgba(38, 209, 255, 0.28) 0%, rgba(63, 123, 255, 0.45) 100%);
   }
 
   &:active {
-    background-color: theme.$active-color-pressed;
+    background: linear-gradient(130deg, rgba(31, 178, 222, 0.28) 0%, rgba(47, 100, 231, 0.45) 100%);
   }
 }
 

@@ -11,6 +11,7 @@ Options:
     -v --volume=<number> Audio volume (default: 1.0)
     -d --data=<file>     File to replay for the bot's data channel
     -s --spawn=<string>  Spawn point
+    --runner             Enable room bot-runner mode for this process
 `;
 
 const docopt = require("docopt").docopt;
@@ -40,6 +41,9 @@ function log(...objs) {
     bot: true,
     allow_multi: true
   };
+  if (options["--runner"]) {
+    params.bot_runner = true;
+  }
   const roomOption = options["--room"];
   if (roomOption) {
     params.hub_id = roomOption;

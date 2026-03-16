@@ -2,8 +2,8 @@
 
 :local(.home-page) {
   flex: 1;
-  background-size: cover;
-  padding: 0;
+  background: radial-gradient(130% 100% at 0% 0%, rgba(38, 209, 255, 0.12) 0%, rgba(8, 14, 27, 0) 55%);
+  padding: 0 0 20px;
   flex-direction: column;
   align-items: center;
 
@@ -22,10 +22,22 @@
   justify-content: center;
   padding: 20px;
   width: 150px;
-  
+
   img {
     width: 100%;
     align-self: flex-start;
+  }
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: theme.$text1-color;
   }
 
   @media (min-width: theme.$breakpoint-lg) {
@@ -38,7 +50,8 @@
   flex-direction: column;
   align-items: center;
   flex: 1;
-  @media(min-width: theme.$breakpoint-lg) {
+
+  @media (min-width: theme.$breakpoint-lg) {
     display: none;
   }
 }
@@ -52,18 +65,60 @@
   flex-direction: column;
   align-items: center;
   flex: 1;
+  width: 100%;
+  gap: 20px;
+  padding: 12px 8px 0;
 
   @media (min-width: theme.$breakpoint-lg) {
     flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 36px;
+    padding: 20px 0 8px;
   }
 }
 
 :local(.hero-image-container) {
+  width: min(560px, 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 8px 0 0;
+
+  @media (min-width: theme.$breakpoint-lg) {
+    width: min(540px, 44%);
+    justify-content: flex-end;
+    margin: 0;
+  }
 
   img {
+    width: min(100%, 540px);
+    max-height: 340px;
+    object-fit: cover;
+    display: block;
+    background: rgba(13, 24, 44, 0.92);
+    border: 1px solid var(--mv-border);
+    border-radius: var(--mv-radius-lg);
+    box-shadow: var(--mv-shadow-2);
+
     @media (min-width: theme.$breakpoint-lg) {
-      border-radius: 16px;
+      max-height: 320px;
     }
+  }
+}
+
+:local(.hero-image-fallback) {
+  width: min(100%, 540px);
+  max-height: 340px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--mv-border);
+  border-radius: var(--mv-radius-lg);
+  box-shadow: var(--mv-shadow-2);
+  background: radial-gradient(90% 85% at 10% 0%, rgba(38, 209, 255, 0.2) 0%, rgba(38, 209, 255, 0) 80%),
+    linear-gradient(160deg, rgba(16, 29, 52, 0.95) 0%, rgba(10, 18, 34, 0.98) 100%);
+
+  @media (min-width: theme.$breakpoint-lg) {
+    max-height: 320px;
   }
 }
 
@@ -77,10 +132,11 @@
   & > * {
     margin-bottom: 20px;
   }
-  
+
   @media (min-width: theme.$breakpoint-lg) {
     margin-bottom: 0;
-    margin-left: 16px;
+    margin-left: 0;
+    max-width: min(700px, 54%);
     justify-content: flex-start;
     align-items: flex-start;
 
@@ -96,13 +152,14 @@
   font-size: theme.$font-size-lg;
   font-weight: theme.$font-weight-medium;
   text-align: center;
-  margin: 0 24px 20px 24px;
-  line-height: 1.25;
+  margin: 0 24px 20px;
+  line-height: 1.3;
+  color: theme.$text2-color;
 
   @media (min-width: theme.$breakpoint-lg) {
     text-align: left;
-    margin: 0 16px 48px 0px;
-    max-width: 860px;
+    margin: 0 0 36px 0;
+    max-width: 100%;
     font-size: theme.$font-size-2xl;
   }
 }
@@ -123,7 +180,7 @@
   display: flex;
   justify-content: space-between;
   margin-bottom: 24px;
-  
+
   & > * {
     margin-bottom: 24px;
 
@@ -131,7 +188,7 @@
       margin-bottom: 0;
     }
 
-    @media(min-width: theme.$breakpoint-lg) {
+    @media (min-width: theme.$breakpoint-lg) {
       margin-right: 24px;
       margin-bottom: 0;
       flex-direction: row;
@@ -142,28 +199,34 @@
       }
     }
   }
-  
+
   img {
     width: 100%;
-    border-radius: 12px;
+    border-radius: var(--mv-radius-md);
   }
 }
 
 :local(.rooms-container) {
-  margin-top: 120px !important;
+  margin-top: 44px !important;
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
 
 :local(.rooms-heading) {
-  margin-left: 40px;
+  margin-left: 0;
+  padding-left: 16px;
   font-size: 24px;
   margin-bottom: 16px;
 }
- 
+
 :local(.rooms) {
-  background-color: theme.$background2-color;
-  border-radius: 16px;
+  background-color: rgba(12, 20, 38, 0.84);
+  border-radius: var(--mv-radius-lg);
+  border: 1px solid theme.$border1-color;
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
+  box-shadow: var(--mv-shadow-2);
 }
 
 :local(.row) {
@@ -174,21 +237,24 @@
 :local(.col-lg) {
   flex-direction: column;
 
-  @media(min-width: theme.$breakpoint-lg) {
+  @media (min-width: theme.$breakpoint-lg) {
     flex-direction: row;
   }
 }
 
 :local(.home-page) :local(.card) {
-  background-color: theme.$background2-color;
-  border-radius: 16px;
+  background: rgba(12, 20, 38, 0.66);
+  border-radius: var(--mv-radius-lg);
+  border: 1px solid theme.$border1-color;
+  -webkit-backdrop-filter: blur(var(--mv-blur-sm));
+  backdrop-filter: blur(var(--mv-blur-sm));
   font-weight: theme.$font-weight-medium;
   padding-bottom: 32px !important;
   flex: 1;
 }
 
 :local(.center-lg) {
-  @media(max-width: theme.$breakpoint-lg) {
+  @media (max-width: theme.$breakpoint-lg) {
     text-align: center;
     align-items: center;
   }

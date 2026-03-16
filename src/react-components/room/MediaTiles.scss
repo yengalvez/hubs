@@ -7,17 +7,20 @@
   height: max-content;
   text-decoration: none;
   background: transparent;
+  padding: 2px;
 }
 
 :local(.thumbnail-container) {
   position: relative;
   overflow: hidden;
   display: flex;
-  background-color: theme.$tile-bg-color;
-  border-radius: 12px;
+  background-color: rgba(17, 29, 52, 0.95);
+  border: 1px solid theme.$tile-button-border-color;
+  border-radius: var(--mv-radius-md);
+  box-shadow: var(--mv-shadow-1);
 
   img, video, :local(.create-tile-content) {
-    border-radius: 12px;
+    border-radius: var(--mv-radius-md);
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -72,7 +75,7 @@
 }
 
 :local(.tile-action), :local(.member-count) {
-  background: theme.$tile-button-bg-color;
+  background: rgba(20, 34, 60, 1);
   color: theme.$tile-button-text-color;
   height: 30px;
   border-radius: 30px;
@@ -89,8 +92,8 @@
 
 :local(.tile-action) {
   &:hover {
-    background-color: theme.$tile-button-bg-color-hover;
-    color: white;
+    background-color: rgba(44, 68, 109, 0.95);
+    color: theme.$text5-color;
   }
 
   &:active {
@@ -116,7 +119,7 @@
 }
 
 :local(.info) {
-  margin-top: 8px;
+  margin-top: 12px;
   color: theme.$text1-color;
 
   & > * {

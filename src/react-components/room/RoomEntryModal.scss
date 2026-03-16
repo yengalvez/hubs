@@ -19,6 +19,7 @@
   object-fit: contain;
   object-position: center;
   margin: 16px 16px 32px;
+  filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.45));
 }
 
 :local(.room-name) {
@@ -30,6 +31,8 @@
     font-size: theme.$font-size-xs;
     color: theme.$text3-color;
     margin-bottom: 4px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
 
   p {

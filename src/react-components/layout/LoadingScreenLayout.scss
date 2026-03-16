@@ -13,7 +13,6 @@
   top: 0;
   background: theme.$loading-screen-background;
   color: theme.$text1-color;
-
   font-size: theme.$font-size-sm;
 
   @media (min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
@@ -26,11 +25,11 @@
 }
 
 :local(.logo) {
-  // Keep arbitrary-sized logos from making the page jump on load
   position: absolute;
   transform: translateY(calc(-100% - 20px));
   max-width: 260px;
   max-height: 140px;
+  filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.42));
 }
 
 :local(.bottom) {

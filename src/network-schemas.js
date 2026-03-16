@@ -17,6 +17,65 @@ function registerNetworkSchemas() {
     };
   };
 
+  const botPathRequiresUpdate = (posEpsilon, yawEpsilonDeg, timeEpsilonMs) => {
+    const angleDeltaDeg = (a, b) => {
+      // Smallest absolute delta in degrees accounting for wrap at 360.
+      const delta = ((a - b + 540) % 360) - 180;
+      return Math.abs(delta);
+    };
+
+    return () => {
+      let prev = null;
+
+      return curr => {
+        if (!curr) return false;
+
+        const sx = Number(curr.sx) || 0;
+        const sy = Number(curr.sy) || 0;
+        const sz = Number(curr.sz) || 0;
+        const ex = Number(curr.ex) || 0;
+        const ey = Number(curr.ey) || 0;
+        const ez = Number(curr.ez) || 0;
+        const t0 = Number(curr.t0) || 0;
+        const dur = Number(curr.dur) || 0;
+        const yaw0 = Number(curr.yaw0) || 0;
+        const yaw1 = Number(curr.yaw1) || 0;
+
+        if (prev === null) {
+          prev = { sx, sy, sz, ex, ey, ez, t0, dur, yaw0, yaw1 };
+          return true;
+        }
+
+        if (
+          Math.abs(sx - prev.sx) > posEpsilon ||
+          Math.abs(sy - prev.sy) > posEpsilon ||
+          Math.abs(sz - prev.sz) > posEpsilon ||
+          Math.abs(ex - prev.ex) > posEpsilon ||
+          Math.abs(ey - prev.ey) > posEpsilon ||
+          Math.abs(ez - prev.ez) > posEpsilon ||
+          Math.abs(t0 - prev.t0) > timeEpsilonMs ||
+          Math.abs(dur - prev.dur) > timeEpsilonMs ||
+          angleDeltaDeg(yaw0, prev.yaw0) > yawEpsilonDeg ||
+          angleDeltaDeg(yaw1, prev.yaw1) > yawEpsilonDeg
+        ) {
+          prev.sx = sx;
+          prev.sy = sy;
+          prev.sz = sz;
+          prev.ex = ex;
+          prev.ey = ey;
+          prev.ez = ez;
+          prev.t0 = t0;
+          prev.dur = dur;
+          prev.yaw0 = yaw0;
+          prev.yaw1 = yaw1;
+          return true;
+        }
+
+        return false;
+      };
+    };
+  };
+
   // Note: networked template ids are semantically important. We use the template suffix as a filter
   // for allowing and authorizing messages in reticulum.
   // See `spawn_permitted?` in https://github.com/Hubs-Foundation/reticulum/blob/master/lib/ret_web/channels/hub_channel.ex
@@ -79,6 +138,17 @@ function registerNetworkSchemas() {
         selector: ".right-controller",
         component: "visible"
       }
+    ]
+  });
+
+  NAF.schemas.add({
+    template: "#remote-bot-avatar",
+    components: [
+      {
+        component: "bot-path",
+        requiresNetworkUpdate: botPathRequiresUpdate(0.005, 0.5, 5)
+      },
+      "bot-info"
     ]
   });
 

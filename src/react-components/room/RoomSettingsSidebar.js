@@ -48,6 +48,9 @@ export function RoomSettingsSidebar({
 
   const entryMode = watch("entry_mode");
   const spawnAndMoveMedia = watch("member_permissions.spawn_and_move_media");
+  const roomBotsFeatureEnabled = !!configs.feature("enable_room_bots");
+  const botChatFeatureEnabled = !!configs.feature("enable_bot_chat");
+  const botsEnabled = !!watch("user_data.bots.enabled");
 
   useEffect(() => {
     if (!spawnAndMoveMedia) {
@@ -55,6 +58,24 @@ export function RoomSettingsSidebar({
       setValue("member_permissions.pin_objects", false, { shouldDirty: true });
     }
   }, [spawnAndMoveMedia, setValue]);
+
+  useEffect(() => {
+    if (!roomBotsFeatureEnabled) return;
+
+    const nextCount = Number(watch("user_data.bots.count"));
+    if (!Number.isFinite(nextCount)) {
+      setValue("user_data.bots.count", 0, { shouldDirty: false });
+    }
+
+    const nextMobility = watch("user_data.bots.mobility");
+    if (!["low", "medium", "high"].includes(nextMobility)) {
+      setValue("user_data.bots.mobility", "medium", { shouldDirty: false });
+    }
+
+    if (!botChatFeatureEnabled) {
+      setValue("user_data.bots.chat_enabled", false, { shouldDirty: true });
+    }
+  }, [botChatFeatureEnabled, roomBotsFeatureEnabled, setValue, watch]);
 
   const [isShareInEnglish, setIsShareInEnglish] = useState(false);
 
@@ -254,6 +275,93 @@ export function RoomSettingsSidebar({
             {...register("user_data.hubs_use_bitecs_based_client")}
           />
         </InputField>
+        {roomBotsFeatureEnabled && (
+          <InputField label={<FormattedMessage id="room-settings-sidebar.bots" defaultMessage="Room Bots" />} fullWidth>
+            <ToggleInput
+              label={<FormattedMessage id="room-settings-sidebar.bots-enabled" defaultMessage="Enable bots" />}
+              description={
+                <FormattedMessage
+                  id="room-settings-sidebar.bots-enabled-description"
+                  defaultMessage="Enable bot spawning and movement in this room."
+                />
+              }
+              {...register("user_data.bots.enabled")}
+            />
+            <NumericInputField
+              required={botsEnabled}
+              min={0}
+              max={10}
+              disabled={!botsEnabled}
+              placeholder={intl.formatMessage({
+                id: "room-settings-sidebar.bots-count-placeholder",
+                defaultMessage: "Bot count"
+              })}
+              label={<FormattedMessage id="room-settings-sidebar.bots-count" defaultMessage="Bot Count" />}
+              error={errors?.user_data?.bots?.count?.message}
+              fullWidth
+              {...register("user_data.bots.count", {
+                valueAsNumber: true,
+                min: 0,
+                max: 10
+              })}
+            />
+            <RadioInputField
+              label={<FormattedMessage id="room-settings-sidebar.bots-mobility" defaultMessage="Mobility" />}
+              fullWidth
+            >
+              <RadioInputOption
+                value="low"
+                disabled={!botsEnabled}
+                label={<FormattedMessage id="room-settings-sidebar.bots-mobility-low" defaultMessage="Low" />}
+                description={
+                  <FormattedMessage
+                    id="room-settings-sidebar.bots-mobility-low-description"
+                    defaultMessage="Long idle periods with short movements."
+                  />
+                }
+                error={errors?.user_data?.bots?.mobility?.message}
+                {...register("user_data.bots.mobility")}
+              />
+              <RadioInputOption
+                value="medium"
+                disabled={!botsEnabled}
+                label={<FormattedMessage id="room-settings-sidebar.bots-mobility-medium" defaultMessage="Medium" />}
+                description={
+                  <FormattedMessage
+                    id="room-settings-sidebar.bots-mobility-medium-description"
+                    defaultMessage="Balanced idle and movement cycles."
+                  />
+                }
+                error={errors?.user_data?.bots?.mobility?.message}
+                {...register("user_data.bots.mobility")}
+              />
+              <RadioInputOption
+                value="high"
+                disabled={!botsEnabled}
+                label={<FormattedMessage id="room-settings-sidebar.bots-mobility-high" defaultMessage="High" />}
+                description={
+                  <FormattedMessage
+                    id="room-settings-sidebar.bots-mobility-high-description"
+                    defaultMessage="Frequent movement between patrol points."
+                  />
+                }
+                error={errors?.user_data?.bots?.mobility?.message}
+                {...register("user_data.bots.mobility")}
+              />
+            </RadioInputField>
+            <ToggleInput
+              label={<FormattedMessage id="room-settings-sidebar.bots-chat-enabled" defaultMessage="Enable bot chat" />}
+              disabled={!botsEnabled || !botChatFeatureEnabled}
+              description={
+                <FormattedMessage
+                  id="room-settings-sidebar.bots-chat-enabled-description"
+                  defaultMessage="Allow private chat panels with nearby bots."
+                />
+              }
+              {...register("user_data.bots.chat_enabled")}
+            />
+          </InputField>
+        )}
         <ApplyButton type="submit" />
       </Column>
     </Sidebar>

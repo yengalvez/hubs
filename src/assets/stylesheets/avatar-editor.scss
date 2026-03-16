@@ -56,6 +56,25 @@
     display: flex;
     flex-direction: column;
 
+    .mode-info {
+      margin: 8px 0 12px;
+      max-width: 560px;
+      padding: 10px 12px;
+      border: 1px solid theme.$border1-color;
+      border-radius: 12px;
+      background: rgba(20, 33, 58, 0.8);
+      color: theme.$text2-color;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .error-text {
+      margin: 8px 0 0;
+      color: theme.$cancel-color;
+      font-size: 13px;
+      font-weight: theme.$font-weight-bold;
+    }
+
     > label {
       margin-top: 8px;
     }

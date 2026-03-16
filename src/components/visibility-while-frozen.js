@@ -89,8 +89,11 @@ AFRAME.registerComponent("visibility-while-frozen", {
         this.camWorldPos.distanceToSquared(this.objWorldPos) < this.data.withinDistance * this.data.withinDistance;
     }
 
-    const isTransforming = this.el.sceneEl.systems["transform-selected-object"].transforming;
-    const isHoldingAnything = this.el.sceneEl.systems.interaction.isHoldingAnything();
+    const transformSystem = this.el.sceneEl.systems["transform-selected-object"];
+    const interactionSystem = this.el.sceneEl.systems.interaction;
+    const interactionState = interactionSystem && interactionSystem.state;
+    const isTransforming = !!(transformSystem && transformSystem.transforming);
+    const isHoldingAnything = interactionSystem ? interactionSystem.isHoldingAnything() : false;
 
     if (this.data.withPermission && this.data.withoutPermission) {
       throw new Error(
@@ -116,12 +119,11 @@ AFRAME.registerComponent("visibility-while-frozen", {
       !isHoldingAnything;
 
     if (this.data.requireHoverOnNonMobile && !isMobile) {
+      const rightHovered = interactionState && interactionState.rightRemote && interactionState.rightRemote.hovered;
+      const leftHovered = interactionState && interactionState.leftRemote && interactionState.leftRemote.hovered;
       shouldBeVisible =
         shouldBeVisible &&
-        ((this.hoverable &&
-          (this.el.sceneEl.systems.interaction.state.rightRemote.hovered === this.hoverable ||
-            this.el.sceneEl.systems.interaction.state.leftRemote.hovered === this.hoverable)) ||
-          isVisible);
+        ((this.hoverable && (rightHovered === this.hoverable || leftHovered === this.hoverable)) || isVisible);
     }
 
     if (!this.data.visibleIfOwned) {
@@ -148,8 +150,8 @@ AFRAME.registerComponent("visibility-while-frozen", {
     this.el.sceneEl.removeEventListener("stateremoved", this.onStateChange);
 
     if (this.hoverable) {
-      this.hoverable.object3D.addEventListener("hovered", this.updateVisibility);
-      this.hoverable.object3D.addEventListener("unhovered", this.updateVisibility);
+      this.hoverable.object3D.removeEventListener("hovered", this.updateVisibility);
+      this.hoverable.object3D.removeEventListener("unhovered", this.updateVisibility);
     }
   }
 });

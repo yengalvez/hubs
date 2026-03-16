@@ -60,6 +60,12 @@ export default class MessageDispatch extends EventTarget {
   receive(message) {
     if (isLockedDownDemoRoom()) return;
 
+    // Bot control traffic should not show up as user-facing chat/presence log entries.
+    if (message && message.type === "bot_command") {
+      this.dispatchEvent(new CustomEvent("message", { detail: message }));
+      return;
+    }
+
     this.addToPresenceLog(message);
     this.dispatchEvent(new CustomEvent("message", { detail: message }));
   }

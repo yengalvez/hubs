@@ -77,6 +77,8 @@ import "./components/hover-visuals";
 import "./components/offset-relative-to";
 import "./components/player-info";
 import "./components/fullbody-locomotion";
+import "./components/bot-info";
+import "./components/bot-path";
 import "./components/name-tag";
 import "./components/debug";
 import "./components/hand-poses";
@@ -181,6 +183,7 @@ import "./systems/listed-media";
 import "./systems/linked-media";
 import "./systems/audio-debug-system";
 import "./systems/audio-gain-system";
+import "./systems/bot-runner-system";
 import "./gltf-component-mappings";
 
 import { App, getScene } from "./app";
@@ -197,6 +200,20 @@ import { LinkHoverMenuPrefab } from "./prefabs/link-hover-menu";
 import { PDFMenuPrefab } from "./prefabs/pdf-menu";
 import { loadWaypointPreviewModel, WaypointPreview } from "./prefabs/waypoint-preview";
 import { preload } from "./utils/preload";
+
+if (document.body) {
+  document.body.classList.add("is-hub-page");
+} else {
+  window.addEventListener(
+    "DOMContentLoaded",
+    () => {
+      if (document.body) {
+        document.body.classList.add("is-hub-page");
+      }
+    },
+    { once: true }
+  );
+}
 
 window.APP = new App();
 function addToScene(entityDef, visible) {
@@ -854,6 +871,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     );
   });
 
+  window.addEventListener("action_create_avaturn_avatar", () => {
+    performConditionalSignIn(
+      () => hubChannel.signedIn,
+      () => pushHistoryState(history, "overlay", "avatar-editor", { mode: "avaturn-private" }),
+      SignInMessages.createAvatar
+    );
+  });
+
   scene.addEventListener("scene_media_selected", e => {
     const sceneInfo = e.detail;
 
@@ -1120,7 +1145,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       isMobileVR: isThisMobileVR,
       isEmbed,
       hubInviteId: qs.get("hub_invite_id"),
-      authToken: store.state.credentials && store.state.credentials.token
+      authToken: store.state.credentials && store.state.credentials.token,
+      botRunner: qsTruthy("bot_runner")
     });
   };
 
@@ -1376,7 +1402,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       sent: session_id === socket.params().session_id
     };
 
-    if (scene.is("vr-mode")) {
+    if (scene.is("vr-mode") && type !== "bot_command") {
       createInWorldLogMessage(incomingMessage);
     }
 

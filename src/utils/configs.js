@@ -71,7 +71,27 @@ if (window.APP_CONFIG) {
   };
 }
 
-const isLocalDevelopment = process.env.NODE_ENV === "development";
+const defaultImages = {
+  logo: appLogo,
+  logo_dark: appLogoDark,
+  company_logo: companyLogo,
+  editor_logo: sceneEditorLogo,
+  home_background: homeHeroBackground
+};
+
+const PLACEHOLDER_IMAGE_TOKENS = {
+  logo: ["app-logo"],
+  logo_dark: ["app-logo-dark", "app-logo"],
+  company_logo: ["company-logo"],
+  editor_logo: ["editor-logo"]
+};
+
+function isPlaceholderImage(imageName, url) {
+  const tokens = PLACEHOLDER_IMAGE_TOKENS[imageName];
+  if (!tokens || !url) return false;
+  const normalized = url.split(/[?#]/)[0].toLowerCase();
+  return tokens.some(token => normalized.includes(token));
+}
 
 configs.feature = featureName => {
   const value = configs.APP_CONFIG && configs.APP_CONFIG.features && configs.APP_CONFIG.features[featureName];
@@ -83,21 +103,17 @@ configs.feature = featureName => {
   }
 };
 
-let localDevImages = {};
-if (isLocalDevelopment) {
-  localDevImages = {
-    logo: appLogo,
-    logo_dark: appLogoDark,
-    company_logo: companyLogo,
-    editor_logo: sceneEditorLogo,
-    home_background: homeHeroBackground
-  };
-}
-
 configs.image = (imageName, cssUrl) => {
-  const url =
-    (configs.APP_CONFIG && configs.APP_CONFIG.images && configs.APP_CONFIG.images[imageName]) ||
-    localDevImages[imageName];
+  const configuredImage =
+    configs.APP_CONFIG &&
+    configs.APP_CONFIG.images &&
+    typeof configs.APP_CONFIG.images[imageName] === "string" &&
+    configs.APP_CONFIG.images[imageName].trim()
+      ? configs.APP_CONFIG.images[imageName].trim()
+      : null;
+  const defaultImage = defaultImages[imageName];
+  const image = configuredImage || defaultImage;
+  const url = isPlaceholderImage(imageName, image) ? null : image;
   return url && cssUrl ? `url(${url})` : url;
 };
 

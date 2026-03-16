@@ -65,7 +65,7 @@
 <body>
     <div id="support-root"></div>
 
-    <a-scene hubs-systems capture-system listed-media local-audio-analyser class="grab-cursor"
+    <a-scene hubs-systems capture-system listed-media local-audio-analyser bot-runner-system class="grab-cursor"
         networked-scene="audio: true; debug: true; connectOnLoad: false;"
         mute-mic="eventSrc: a-scene; toggleEvents: action_mute"
         action-to-event__mute="path: /actions/muteMic; event: action_mute;" freeze-controller
@@ -223,6 +223,20 @@
                         <template data-name="RightHand">
                             <a-entity personal-space-invader="radius: 0.1"
                                 bone-visibility="updateWhileInvisible: true;"></a-entity>
+                        </template>
+                    </a-entity>
+                </a-entity>
+            </template>
+
+            <template id="remote-bot-avatar">
+                <a-entity tags="inspectable: true" bot-info bot-path visible="false">
+                    <a-entity class="bot-placeholder" position="0 0.85 0">
+                        <a-entity geometry="primitive: capsule; radius: 0.18; height: 1.2;"
+                            material="color: #D7DEE8; roughness: 1; metalness: 0;"></a-entity>
+                    </a-entity>
+                    <a-entity class="model" gltf-model-plus="inflate: true">
+                        <template data-name="AvatarRoot">
+                            <a-entity fullbody-locomotion="forceForward: true"></a-entity>
                         </template>
                     </a-entity>
                 </a-entity>

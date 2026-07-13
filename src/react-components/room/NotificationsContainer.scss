@@ -4,9 +4,9 @@
   position: absolute;
   display: flex;
   align-items: center;
-  width: max-content;
-  max-width: min(100% - 8px, 420px);
-  min-width: 420px;
+  width: min(calc(100% - 16px), 420px);
+  max-width: 420px;
+  min-width: 0;
   left: 50%;
   transform: translateX(-50%);
   flex-direction: column;

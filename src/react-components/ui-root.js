@@ -111,6 +111,7 @@ import { SceneRoot, Waypoint } from "../bit-components";
 import {
   WaypointFlags,
   releaseOccupiedWaypoint,
+  tryOccupyWaypoint,
   moveToSpawnPoint as moveToSpawnPointBitEcs
 } from "../bit-systems/waypoint";
 import { findAncestorWithComponent, shouldUseNewLoader } from "../utils/bit-utils";
@@ -830,7 +831,7 @@ class UIRoot extends Component {
       if (!world) return;
 
       const eids = bitWaypointQuery(world);
-      let best = null;
+      const candidates = [];
 
       for (let i = 0; i < eids.length; i++) {
         const eid = eids[i];
@@ -847,21 +848,26 @@ class UIRoot extends Component {
         const distSq = this._sittingTmpRigPos.distanceToSquared(this._sittingTmpWaypointPos);
         if (distSq > maxDistSq) continue;
 
-        if (!best || distSq < best.distSq) {
-          best = { eid, obj, flags, distSq };
-        }
+        candidates.push({ eid, obj, flags, distSq });
       }
 
-      if (!best) return;
+      candidates.sort((a, b) => a.distSq - b.distSq);
+      for (let i = 0; i < candidates.length; i++) {
+        const candidate = candidates[i];
+        const canBeOccupied = !!(candidate.flags & WaypointFlags.canBeOccupied);
+        if (canBeOccupied && !tryOccupyWaypoint(world, candidate.eid)) continue;
+        if (!canBeOccupied) releaseOccupiedWaypoint();
 
-      const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
-      characterController.shouldLandWhenPossible = true;
-      characterController.enqueueWaypointTravelTo(best.obj.matrixWorld, isInstant, {
-        willDisableMotion: !!(best.flags & WaypointFlags.willDisableMotion),
-        willDisableTeleporting: !!(best.flags & WaypointFlags.willDisableTeleporting),
-        snapToNavMesh: !!(best.flags & WaypointFlags.snapToNavMesh),
-        willMaintainInitialOrientation: !!(best.flags & WaypointFlags.willMaintainInitialOrientation)
-      });
+        const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
+        characterController.shouldLandWhenPossible = true;
+        characterController.enqueueWaypointTravelTo(candidate.obj.matrixWorld, isInstant, {
+          willDisableMotion: !!(candidate.flags & WaypointFlags.willDisableMotion),
+          willDisableTeleporting: !!(candidate.flags & WaypointFlags.willDisableTeleporting),
+          snapToNavMesh: !!(candidate.flags & WaypointFlags.snapToNavMesh),
+          willMaintainInitialOrientation: !!(candidate.flags & WaypointFlags.willMaintainInitialOrientation)
+        });
+        return;
+      }
 
       return;
     }

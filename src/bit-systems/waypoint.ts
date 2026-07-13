@@ -42,6 +42,23 @@ export function releaseOccupiedWaypoint() {
   }
 }
 
+export function tryOccupyWaypoint(world: HubsWorld, eid: EntityID) {
+  if (
+    !entityExists(world, eid) ||
+    !hasComponent(world, NetworkedWaypoint, eid) ||
+    NetworkedWaypoint.occupied[eid]
+  ) {
+    return false;
+  }
+
+  releaseOccupiedWaypoint();
+  takeOwnership(world, eid);
+  if (!hasComponent(world, Owned, eid)) return false;
+
+  occupyWaypoint(world, eid);
+  return true;
+}
+
 function occupyWaypoint(world: HubsWorld, eid: EntityID) {
   if (!hasComponent(world, Owned, eid)) {
     throw new Error("Tried to occupy waypoint before owning it.");

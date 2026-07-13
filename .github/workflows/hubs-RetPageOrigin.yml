@@ -29,7 +29,7 @@ jobs:
     #
     # To keep forks working, gate this job to the upstream org (or explicitly enable it via a repo var).
     if: ${{ github.repository_owner == 'Hubs-Foundation' || vars.ENABLE_TURKEY_GITOPS == 'true' }}
-    uses: Hubs-Foundation/hubs-ops/.github/workflows/turkeyGitops.yml@master
+    uses: Hubs-Foundation/hubs-ops/.github/workflows/turkeyGitops.yml@afcc26a61a6353affc116e8fa5fb409078bbcb82
     with:
       registry: hubsfoundation
       dockerfile: RetPageOriginDockerfile

@@ -11,6 +11,7 @@ import IfFeature from "./if-feature";
 import { fetchReticulumAuthenticated } from "../utils/phoenix-utils";
 import { upload } from "../utils/media-utils";
 import { ensureAvatarMaterial } from "../utils/avatar-utils";
+import { validateAvatarGlbFile } from "../utils/avatar-glb-utils";
 
 import AvatarPreview from "./avatar-preview";
 import styles from "../assets/stylesheets/avatar-editor.scss";
@@ -27,6 +28,10 @@ const delistAvatarInfoMessage = defineMessage({
 });
 
 const AVATARS_API = "/api/v1/avatars";
+
+const revokeObjectUrl = url => {
+  if (typeof url === "string" && url.startsWith("blob:")) URL.revokeObjectURL(url);
+};
 
 const defaultEditors = [
   // TODO This previously contain tryquilt.io.  We should re-evaluate whether these types of editors are still desired,
@@ -109,6 +114,12 @@ class AvatarEditor extends Component {
 
   isAvaturnPrivateMode = () => this.props.mode === "avaturn-private";
 
+  componentWillUnmount() {
+    revokeObjectUrl(this.state.previewGltfUrl);
+    const files = (this.state.avatar && this.state.avatar.files) || {};
+    Object.values(files).forEach(revokeObjectUrl);
+  }
+
   componentDidMount = async () => {
     if (this.props.avatarId) {
       const avatar = await fetchAvatar(this.props.avatarId);
@@ -162,64 +173,73 @@ class AvatarEditor extends Component {
   uploadAvatar = async e => {
     e.preventDefault();
     const isAvaturnPrivateMode = this.isAvaturnPrivateMode();
+    const localGlb = this.inputFiles.glb instanceof File ? this.inputFiles.glb : null;
 
-    if (isAvaturnPrivateMode && !(this.inputFiles.glb && this.inputFiles.glb instanceof File)) {
+    if (isAvaturnPrivateMode && !localGlb) {
       this.setState({ uploadError: "Selecciona un archivo .glb antes de guardar." });
       return;
     }
 
-    this.setState({ uploadError: null });
+    let gltfUrl = null;
+    this.setState({ uploadError: null, uploading: true });
 
-    if (this.inputFiles.glb && this.inputFiles.glb instanceof File) {
-      const gltfLoader = new GLTFLoader().register(parser => new GLTFBinarySplitterPlugin(parser));
-      const gltfUrl = URL.createObjectURL(this.inputFiles.glb);
-      const onProgress = console.log;
+    try {
+      if (localGlb) {
+        await validateAvatarGlbFile(localGlb);
+        const gltfLoader = new GLTFLoader().register(parser => new GLTFBinarySplitterPlugin(parser));
+        gltfUrl = URL.createObjectURL(localGlb);
 
-      await new Promise((resolve, reject) => {
-        // GLTFBinarySplitterPlugin saves gltf and bin in gltf.files
-        gltfLoader.load(
-          gltfUrl,
-          result => {
-            this.inputFiles.gltf = result.files.gltf;
-            this.inputFiles.bin = result.files.bin;
-            resolve(result);
-          },
-          onProgress,
-          reject
-        );
+        await new Promise((resolve, reject) => {
+          // GLTFBinarySplitterPlugin saves gltf and bin in gltf.files.
+          gltfLoader.load(
+            gltfUrl,
+            result => {
+              this.inputFiles.gltf = result.files.gltf;
+              this.inputFiles.bin = result.files.bin;
+              resolve(result);
+            },
+            undefined,
+            reject
+          );
+        });
+      }
+
+      this.inputFiles.thumbnail = new File([await this.preview.snapshot()], "thumbnail.png", {
+        type: "image/png"
       });
 
-      URL.revokeObjectURL(gltfUrl);
+      const filesToUpload = ["gltf", "bin", "base_map", "emissive_map", "normal_map", "orm_map", "thumbnail"].filter(
+        k => this.inputFiles[k] === null || this.inputFiles[k] instanceof File
+      );
+      const fileUploads = await Promise.all(filesToUpload.map(f => this.inputFiles[f] && upload(this.inputFiles[f])));
+      const avatar = {
+        ...this.state.avatar,
+        allow_promotion: isAvaturnPrivateMode ? false : this.state.avatar.allow_promotion,
+        allow_remixing: isAvaturnPrivateMode ? false : this.state.avatar.allow_remixing,
+        attributions: {
+          creator: this.state.avatar.creatorAttribution
+        },
+        files: fileUploads
+          .map((resp, i) => [
+            filesToUpload[i],
+            resp && [resp.file_id, resp.meta.access_token, resp.meta.promotion_token]
+          ])
+          .reduce((o, [k, v]) => ({ ...o, [k]: v }), {})
+      };
+
+      await this.createOrUpdateAvatar(avatar);
+      this.setState({ uploading: false }, () => {
+        if (this.props.onSave) this.props.onSave();
+      });
+    } catch (error) {
+      console.error("Failed to upload avatar.", error);
+      this.setState({
+        uploading: false,
+        uploadError: error && error.message ? error.message : "No se pudo subir el avatar. Inténtalo de nuevo."
+      });
+    } finally {
+      revokeObjectUrl(gltfUrl);
     }
-
-    this.inputFiles.thumbnail = new File([await this.preview.snapshot()], "thumbnail.png", {
-      type: "image/png"
-    });
-
-    const filesToUpload = ["gltf", "bin", "base_map", "emissive_map", "normal_map", "orm_map", "thumbnail"].filter(
-      k => this.inputFiles[k] === null || this.inputFiles[k] instanceof File
-    );
-
-    this.setState({ uploading: true });
-
-    const fileUploads = await Promise.all(filesToUpload.map(f => this.inputFiles[f] && upload(this.inputFiles[f])));
-    const avatar = {
-      ...this.state.avatar,
-      allow_promotion: isAvaturnPrivateMode ? false : this.state.avatar.allow_promotion,
-      allow_remixing: isAvaturnPrivateMode ? false : this.state.avatar.allow_remixing,
-      attributions: {
-        creator: this.state.avatar.creatorAttribution
-      },
-      files: fileUploads
-        .map((resp, i) => [filesToUpload[i], resp && [resp.file_id, resp.meta.access_token, resp.meta.promotion_token]])
-        .reduce((o, [k, v]) => ({ ...o, [k]: v }), {})
-    };
-
-    await this.createOrUpdateAvatar(avatar);
-
-    this.setState({ uploading: false });
-
-    if (this.props.onSave) this.props.onSave();
   };
 
   deleteAvatar = async e => {
@@ -239,19 +259,30 @@ class AvatarEditor extends Component {
         type="file"
         accept={accept}
         disabled={disabled}
-        onChange={e => {
+        onChange={async e => {
           const file = e.target.files[0];
           e.target.value = null;
+          if (!file) return;
+
+          try {
+            if (name === "glb") await validateAvatarGlbFile(file);
+          } catch (error) {
+            this.setState({ uploadError: error.message });
+            return;
+          }
+
+          revokeObjectUrl(this.state.previewGltfUrl);
+          revokeObjectUrl(this.state.avatar.files[name]);
+          const objectUrl = URL.createObjectURL(file);
           this.inputFiles[name] = file;
-          URL.revokeObjectURL(this.state.previewGltfUrl);
-          const previewGltfUrl = URL.createObjectURL(this.inputFiles.glb);
           this.setState({
-            previewGltfUrl,
+            uploadError: null,
+            previewGltfUrl: name === "glb" ? objectUrl : this.state.previewGltfUrl,
             avatar: {
               ...this.state.avatar,
               files: {
                 ...this.state.avatar.files,
-                [name]: URL.createObjectURL(file)
+                [name]: objectUrl
               }
             }
           });
@@ -261,7 +292,7 @@ class AvatarEditor extends Component {
         <a
           onClick={() => {
             this.inputFiles[name] = null;
-            URL.revokeObjectURL(this.state.avatar.files[name]);
+            revokeObjectUrl(this.state.avatar.files[name]);
             this.setState(
               {
                 avatar: {
@@ -417,21 +448,33 @@ class AvatarEditor extends Component {
         id="avatar-file_glb"
         type="file"
         accept="model/gltf+binary,.glb"
-        onChange={e => {
+        onChange={async e => {
           const file = e.target.files[0];
           e.target.value = null;
+          if (!file) return;
+
+          try {
+            await validateAvatarGlbFile(file);
+          } catch (error) {
+            this.setState({ uploadError: error.message });
+            return;
+          }
+
+          revokeObjectUrl(this.state.avatar.files.glb);
+          revokeObjectUrl(this.state.previewGltfUrl);
+          const objectUrl = URL.createObjectURL(file);
           this.inputFiles["glb"] = file;
-          URL.revokeObjectURL(this.state.avatar.files["glb"]);
           this.setState({
+            uploadError: null,
             avatar: {
               ...this.state.avatar,
               [propName]: "",
               files: {
                 ...this.state.avatar.files,
-                glb: URL.createObjectURL(file)
+                glb: objectUrl
               }
             },
-            previewGltfUrl: this.getPreviewUrl("")
+            previewGltfUrl: objectUrl
           });
         }}
       />
@@ -749,6 +792,7 @@ class AvatarEditor extends Component {
                 </IfFeature>
               </div>
             )}
+            {!isAvaturnPrivateMode && this.state.uploadError && <p className="error-text">{this.state.uploadError}</p>}
             <div>
               <button disabled={this.state.uploading} className="form-submit" type="submit">
                 {this.state.uploading ? (

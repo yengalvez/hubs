@@ -279,9 +279,10 @@ export class CameraSystem {
   }
 
   setMode(cameraMode) {
-    if (cameraMode > CAMERA_MODE_THIRD_PERSON_VIEW || cameraMode < 0 || cameraMode === this.mode) return;
+    if (cameraMode > CAMERA_MODE_THIRD_PERSON_VIEW || cameraMode < 0) return;
     const vrMode = AFRAME.scenes[0].is("vr-mode") || AFRAME.utils.device.isMobileVR();
     const mode = vrMode ? CAMERA_MODE_FIRST_PERSON : cameraMode;
+    if (mode === this.mode) return;
 
     this.mode = mode;
 

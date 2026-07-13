@@ -34,6 +34,7 @@ import { fetchReticulumAuthenticated, getDirectReticulumFetchUrl } from "hubs/sr
 import { proxiedUrlFor } from "hubs/src/utils/media-url-utils";
 import { ensureAvatarMaterial } from "hubs/src/utils/avatar-utils";
 import { getAvatarSkeletonMetadata } from "hubs/src/utils/avatar-skeleton-utils";
+import { validateAvatarGlbFile } from "hubs/src/utils/avatar-glb-utils";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import clsx from "classnames";
@@ -407,7 +408,10 @@ class ImportContentComponent extends Component {
       hadUrl = true;
     }
 
-    this.setState({ loadFailed: !hadUrl });
+    this.setState({
+      loadFailed: !hadUrl,
+      loadFailureMessage: !hadUrl ? "Failed to load specified URLs." : null
+    });
 
     this.setState({ urls: "", isLoading: false });
   }
@@ -422,6 +426,15 @@ class ImportContentComponent extends Component {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const importId = `local://${Date.now()}-${i}-${file.name}`;
+
+      try {
+        await validateAvatarGlbFile(file);
+      } catch (error) {
+        console.warn(`Rejected local avatar ${file.name}.`, error);
+        this.setState({ loadFailed: true, loadFailureMessage: `${file.name}: ${error.message}` });
+        continue;
+      }
+
       const skeletonMetadata = await this.getLocalAvatarSkeletonMetadata(file);
       const autoTags = [];
 
@@ -1154,7 +1167,7 @@ class ImportContentComponent extends Component {
               message={
                 <span id="import-snackbar" className={this.props.classes.message}>
                   <Icon className={clsx(this.props.classes.icon, this.props.classes.iconVariant)} />
-                  Failed to load specified URLs.
+                  {this.state.loadFailureMessage || "Failed to load specified URLs."}
                 </span>
               }
               action={[

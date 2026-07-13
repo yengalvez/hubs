@@ -5,7 +5,7 @@ on:
     
 jobs:
   hcpkgrelease:
-    uses: Hubs-Foundation/hubs-ops/.github/workflows/HcPkgPreReleaseGitops.yaml@master
+    uses: Hubs-Foundation/hubs-ops/.github/workflows/HcPkgPreReleaseGitops.yaml@afcc26a61a6353affc116e8fa5fb409078bbcb82
     with:
       main: master
       releaseTrackingBranch: hubs-cloud

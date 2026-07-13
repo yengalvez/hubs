@@ -51,6 +51,7 @@ export function RoomSettingsSidebar({
   const roomBotsFeatureEnabled = !!configs.feature("enable_room_bots");
   const botChatFeatureEnabled = !!configs.feature("enable_bot_chat");
   const botsEnabled = !!watch("user_data.bots.enabled");
+  const botChatEnabled = !!watch("user_data.bots.chat_enabled");
 
   useEffect(() => {
     if (!spawnAndMoveMedia) {
@@ -359,6 +360,19 @@ export function RoomSettingsSidebar({
                 />
               }
               {...register("user_data.bots.chat_enabled")}
+            />
+            <TextAreaInputField
+              disabled={!botsEnabled || !botChatFeatureEnabled || !botChatEnabled}
+              placeholder={intl.formatMessage({
+                id: "room-settings-sidebar.bots-prompt-placeholder",
+                defaultMessage: "Describe the bot's role, tone and room-specific knowledge."
+              })}
+              label={<FormattedMessage id="room-settings-sidebar.bots-prompt" defaultMessage="Bot instructions" />}
+              minRows={4}
+              maxLength={1500}
+              error={errors?.user_data?.bots?.prompt?.message}
+              fullWidth
+              {...register("user_data.bots.prompt", { maxLength: 1500 })}
             />
           </InputField>
         )}

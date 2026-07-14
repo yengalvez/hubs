@@ -51,6 +51,7 @@ const RESULTS = {
 };
 
 const AVATARS_API = "/api/v1/avatars";
+const LOCAL_AVATAR_CREATE_INTERVAL_MS = 1100;
 
 const AVATAR_THUMBNAIL_WIDTH = 720;
 const AVATAR_THUMBNAIL_HEIGHT = 1280;
@@ -135,10 +136,10 @@ class ImportContentComponent extends Component {
     imports: [],
     addBaseTag: false,
     addDefaultTag: false,
-    reticulumMeta: {},
-    baseAvatarListingId: null,
-    baseAvatarBaseGltfUrl: null
+    reticulumMeta: {}
   };
+
+  lastLocalAvatarCreateAt = 0;
 
   componentWillUnmount() {
     // Clean up any blob URLs we created for local preview thumbnails.
@@ -163,47 +164,11 @@ class ImportContentComponent extends Component {
 
   async componentDidMount() {
     this.updateReticulumMeta();
-    this.updateBaseAvatarListingId();
   }
 
   async updateReticulumMeta() {
     const reticulumMeta = await fetchReticulumAuthenticated(`/api/v1/meta?include_repo`);
     this.setState({ reticulumMeta });
-  }
-
-  async updateBaseAvatarListingId() {
-    try {
-      const findBaseEntry = entries => (entries || []).find(entry => entry && entry.gltfs && entry.gltfs.base);
-
-      // Prefer an explicitly-tagged base avatar listing (filter=base).
-      const baseResponse = await fetchReticulumAuthenticated(`/api/v1/media/search?filter=base&source=avatar_listings`);
-      let baseEntry = findBaseEntry(baseResponse && baseResponse.entries) || (baseResponse && baseResponse.entries[0]);
-
-      // Fallback: pick any avatar listing that provides a base glTF (typically the built-in base bot).
-      if (!baseEntry || !baseEntry.gltfs || !baseEntry.gltfs.base) {
-        const fallbackResponse = await fetchReticulumAuthenticated(`/api/v1/media/search?source=avatar_listings`);
-        baseEntry = findBaseEntry(fallbackResponse && fallbackResponse.entries);
-      }
-
-      const baseAvatarListingId = baseEntry && baseEntry.id;
-      const baseAvatarBaseGltfUrl = baseEntry && baseEntry.gltfs && baseEntry.gltfs.base;
-
-      await new Promise(resolve =>
-        this.setState(
-          {
-            baseAvatarListingId: baseAvatarListingId || null,
-            baseAvatarBaseGltfUrl: baseAvatarBaseGltfUrl || null
-          },
-          resolve
-        )
-      );
-
-      return baseAvatarListingId || null;
-    } catch (e) {
-      console.warn("Failed to fetch base avatar listing info.", e);
-      await new Promise(resolve => this.setState({ baseAvatarListingId: null, baseAvatarBaseGltfUrl: null }, resolve));
-      return null;
-    }
   }
 
   normalizeSubmittedUrl(url) {
@@ -647,23 +612,6 @@ class ImportContentComponent extends Component {
   async importLocalAvatar(importRecord) {
     const { localFile } = importRecord;
 
-    let baseAvatarListingId = this.state.baseAvatarListingId;
-    let baseAvatarBaseGltfUrl = this.state.baseAvatarBaseGltfUrl;
-    if (!baseAvatarListingId) {
-      baseAvatarListingId = await this.updateBaseAvatarListingId();
-      baseAvatarBaseGltfUrl = this.state.baseAvatarBaseGltfUrl;
-    }
-    if (!baseAvatarListingId) {
-      throw new Error(
-        "No base avatar listing found. Import a base avatar first (Admin > Import Content), then retry local upload."
-      );
-    }
-    if (!baseAvatarBaseGltfUrl) {
-      throw new Error(
-        "Base avatar listing is missing base glTF. Re-import a known-good base avatar (Admin > Import Content), then retry."
-      );
-    }
-
     const { gltf, bin } = await this.splitGlbIntoFiles(localFile);
     const thumbnail =
       importRecord.localThumbnailFile ||
@@ -684,8 +632,9 @@ class ImportContentComponent extends Component {
 
     const avatar = {
       name: this.avatarNameFromFile(localFile.name),
-      base_gltf_url: baseAvatarBaseGltfUrl,
-      parent_avatar_listing_id: baseAvatarListingId,
+      // A local GLB is complete by itself. An empty parent keeps compatibility
+      // with older Reticulum while avoiding dependencies on stale listings.
+      parent_avatar_listing_id: "",
       allow_promotion: true,
       files: {
         gltf: [uploadResults[0].file_id, uploadResults[0].meta.access_token, uploadResults[0].meta.promotion_token],
@@ -693,6 +642,10 @@ class ImportContentComponent extends Component {
         thumbnail: [uploadResults[2].file_id, uploadResults[2].meta.access_token, uploadResults[2].meta.promotion_token]
       }
     };
+
+    const waitMs = Math.max(0, this.lastLocalAvatarCreateAt + LOCAL_AVATAR_CREATE_INTERVAL_MS - Date.now());
+    if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
+    this.lastLocalAvatarCreateAt = Date.now();
 
     const response = await fetchReticulumAuthenticated(AVATARS_API, "POST", { avatar });
     return response.avatars[0];
@@ -807,7 +760,6 @@ class ImportContentComponent extends Component {
 
         this.setImportResult(url, isNewListing ? RESULTS.new_listing : RESULTS.existing_listing);
         await this.updateReticulumMeta();
-        await this.updateBaseAvatarListingId();
       } catch (error) {
         console.error("onImport:", error);
         this.setImportResult(url, RESULTS.failed);

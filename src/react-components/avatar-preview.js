@@ -209,15 +209,18 @@ class AvatarPreview extends Component {
     const newLoadId = ++this.loadId;
     if (this.props.onGltfLoading) this.props.onGltfLoading();
     const url = proxiedUrlFor(this.props.avatarGltfUrl);
-    const gltf = await this.loadPreviewAvatar(url);
-
-    if (gltf) {
+    try {
+      const gltf = await this.loadPreviewAvatar(url);
       // If we had started loading another avatar while we were loading this one, throw this one away
       if (!this.mounted || newLoadId !== this.loadId) return;
+      if (!gltf) throw new Error("Avatar preview load returned no model.");
       this.setAvatar(gltf.scene);
       if (this.props.onGltfLoaded) this.props.onGltfLoaded(gltf);
-    } else if (this.mounted && newLoadId === this.loadId && this.props.onGltfLoadError) {
-      this.props.onGltfLoadError();
+    } catch (error) {
+      if (!this.mounted || newLoadId !== this.loadId) return;
+      console.error("Failed to load avatar preview", error);
+      this.setState({ loading: false, error: true });
+      if (this.props.onGltfLoadError) this.props.onGltfLoadError(error);
     }
   }
 
@@ -239,14 +242,7 @@ class AvatarPreview extends Component {
   }
 
   loadPreviewAvatar = async avatarGltfUrl => {
-    let gltf;
-    try {
-      gltf = await loadGLTF(avatarGltfUrl, "model/gltf", null, ensureAvatarMaterial);
-    } catch (e) {
-      console.error("Failed to load avatar preview", e);
-      this.setState({ loading: false, error: true });
-      return;
-    }
+    const gltf = await loadGLTF(avatarGltfUrl, "model/gltf", null, ensureAvatarMaterial);
 
     if (!this.mounted) return;
 
@@ -257,9 +253,7 @@ class AvatarPreview extends Component {
     );
 
     if (!this.previewMesh) {
-      console.error("Failed to find avatar preview mesh");
-      this.setState({ loading: false, error: true });
-      return;
+      throw new Error("Failed to find avatar preview mesh.");
     }
 
     const idleAnimation = gltf.animations && gltf.animations.find(({ name }) => name === "idle_eyes");

@@ -72,7 +72,9 @@ class AvatarPreview extends Component {
   static propTypes = {
     avatarGltfUrl: PropTypes.string,
     className: PropTypes.string,
-    onGltfLoaded: PropTypes.func
+    onGltfLoaded: PropTypes.func,
+    onGltfLoading: PropTypes.func,
+    onGltfLoadError: PropTypes.func
   };
   constructor(props) {
     super(props);
@@ -205,14 +207,17 @@ class AvatarPreview extends Component {
 
   async loadCurrentAvatarGltfUrl() {
     const newLoadId = ++this.loadId;
+    if (this.props.onGltfLoading) this.props.onGltfLoading();
     const url = proxiedUrlFor(this.props.avatarGltfUrl);
     const gltf = await this.loadPreviewAvatar(url);
 
     if (gltf) {
       // If we had started loading another avatar while we were loading this one, throw this one away
       if (!this.mounted || newLoadId !== this.loadId) return;
-      if (gltf && this.props.onGltfLoaded) this.props.onGltfLoaded(gltf);
       this.setAvatar(gltf.scene);
+      if (this.props.onGltfLoaded) this.props.onGltfLoaded(gltf);
+    } else if (this.mounted && newLoadId === this.loadId && this.props.onGltfLoadError) {
+      this.props.onGltfLoadError();
     }
   }
 
@@ -357,14 +362,23 @@ class AvatarPreview extends Component {
   };
 
   snapshot = () => {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
+      if (!this.avatar || this.state.loading || this.state.error) {
+        reject(new Error("La vista previa del avatar todavía no está lista."));
+        return;
+      }
+
       if (this.idleAnimationAction) this.idleAnimationAction.stop();
       this.snapshotCamera.position.copy(this.camera.position);
       this.snapshotCamera.rotation.copy(this.camera.rotation);
       this.snapshotRenderer.render(this.scene, this.snapshotCamera);
       this.snapshotCanvas.toBlob(blob => {
         if (this.idleAnimationAction) this.idleAnimationAction.play();
-        resolve(blob);
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error("No se pudo generar la miniatura del avatar."));
+        }
       });
     });
   };

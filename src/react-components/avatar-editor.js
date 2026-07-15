@@ -12,6 +12,7 @@ import { fetchReticulumAuthenticated } from "../utils/phoenix-utils";
 import { upload } from "../utils/media-utils";
 import { ensureAvatarMaterial } from "../utils/avatar-utils";
 import { validateAvatarGlbFile } from "../utils/avatar-glb-utils";
+import { getAvatarSkeletonMetadata } from "../utils/avatar-skeleton-utils";
 
 import AvatarPreview from "./avatar-preview";
 import styles from "../assets/stylesheets/avatar-editor.scss";
@@ -57,8 +58,9 @@ const fetchAvatar = async avatarId => {
 
 // GLTFLoader plugin for splitting glTF and bin from glb.
 class GLTFBinarySplitterPlugin {
-  constructor(parser) {
+  constructor(parser, skipSceneParse = true) {
     this.parser = parser;
+    this.skipSceneParse = skipSceneParse;
     this.gltf = null;
     this.bin = null;
   }
@@ -79,7 +81,7 @@ class GLTFBinarySplitterPlugin {
     // doesn't want to start the parse. But glTF loader plugin API
     // doesn't have an ability to cancel the parse. So overriding
     // parser.json with very light glTF data as workaround.
-    parser.json = { asset: { version: "2.0" } };
+    if (this.skipSceneParse) parser.json = { asset: { version: "2.0" } };
   }
 
   afterRoot(result) {
@@ -104,7 +106,9 @@ class AvatarEditor extends Component {
   state = {
     baseAvatarResults: [],
     editorLinks: defaultEditors,
-    previewGltfUrl: null
+    previewGltfUrl: null,
+    previewReady: false,
+    avatarSkeletonMetadata: null
   };
 
   constructor(props) {
@@ -180,16 +184,26 @@ class AvatarEditor extends Component {
       return;
     }
 
+    if (
+      isAvaturnPrivateMode &&
+      (!this.state.previewReady || !this.state.avatarSkeletonMetadata?.hasRequiredUpperBody)
+    ) {
+      this.setState({ uploadError: "Espera a que el avatar termine de cargarse y valida su esqueleto." });
+      return;
+    }
+
     let gltfUrl = null;
     this.setState({ uploadError: null, uploading: true });
 
     try {
       if (localGlb) {
         await validateAvatarGlbFile(localGlb);
-        const gltfLoader = new GLTFLoader().register(parser => new GLTFBinarySplitterPlugin(parser));
+        const gltfLoader = new GLTFLoader().register(
+          parser => new GLTFBinarySplitterPlugin(parser, !isAvaturnPrivateMode)
+        );
         gltfUrl = URL.createObjectURL(localGlb);
 
-        await new Promise((resolve, reject) => {
+        const parsedGltf = await new Promise((resolve, reject) => {
           // GLTFBinarySplitterPlugin saves gltf and bin in gltf.files.
           gltfLoader.load(
             gltfUrl,
@@ -202,6 +216,13 @@ class AvatarEditor extends Component {
             reject
           );
         });
+
+        if (isAvaturnPrivateMode) {
+          const skeletonMetadata = getAvatarSkeletonMetadata(parsedGltf.scene);
+          if (!skeletonMetadata.hasRequiredUpperBody) {
+            throw new Error(this.getInvalidSkeletonMessage(skeletonMetadata));
+          }
+        }
       }
 
       this.inputFiles.thumbnail = new File([await this.preview.snapshot()], "thumbnail.png", {
@@ -277,6 +298,8 @@ class AvatarEditor extends Component {
           this.inputFiles[name] = file;
           this.setState({
             uploadError: null,
+            previewReady: name === "glb" ? false : this.state.previewReady,
+            avatarSkeletonMetadata: name === "glb" ? null : this.state.avatarSkeletonMetadata,
             previewGltfUrl: name === "glb" ? objectUrl : this.state.previewGltfUrl,
             avatar: {
               ...this.state.avatar,
@@ -295,6 +318,8 @@ class AvatarEditor extends Component {
             revokeObjectUrl(this.state.avatar.files[name]);
             this.setState(
               {
+                previewReady: name === "glb" ? false : this.state.previewReady,
+                avatarSkeletonMetadata: name === "glb" ? null : this.state.avatarSkeletonMetadata,
                 avatar: {
                   ...this.state.avatar,
                   files: {
@@ -524,7 +549,42 @@ class AvatarEditor extends Component {
     if (useAllowedEditors) {
       editorLinks = editorLinks.filter(e => allowedEditors.some(w => w.name === e.name && w.url === e.url));
     }
+    if (this.isAvaturnPrivateMode()) {
+      const avatarSkeletonMetadata = getAvatarSkeletonMetadata(gltf.scene);
+      if (!avatarSkeletonMetadata.hasRequiredUpperBody) {
+        this.setState({
+          editorLinks,
+          previewReady: false,
+          avatarSkeletonMetadata,
+          uploadError: this.getInvalidSkeletonMessage(avatarSkeletonMetadata)
+        });
+        return;
+      }
+
+      this.setState({ editorLinks, previewReady: true, avatarSkeletonMetadata, uploadError: null });
+      return;
+    }
+
     this.setState({ editorLinks });
+  };
+
+  handleGltfLoading = () => {
+    if (!this.isAvaturnPrivateMode()) return;
+    this.setState({ previewReady: false, avatarSkeletonMetadata: null, uploadError: null });
+  };
+
+  handleGltfLoadError = () => {
+    if (!this.isAvaturnPrivateMode()) return;
+    this.setState({
+      previewReady: false,
+      avatarSkeletonMetadata: null,
+      uploadError: "No se pudo cargar el GLB. Comprueba que el archivo sea un avatar Avaturn válido."
+    });
+  };
+
+  getInvalidSkeletonMessage = metadata => {
+    const missingBones = metadata.missingUpperBodyBones.join(", ");
+    return `El GLB no tiene un esqueleto compatible. Faltan estos huesos: ${missingBones}.`;
   };
 
   render() {
@@ -747,6 +807,8 @@ class AvatarEditor extends Component {
                 className="preview"
                 avatarGltfUrl={this.state.previewGltfUrl}
                 onGltfLoaded={this.handleGltfLoaded}
+                onGltfLoading={this.handleGltfLoading}
+                onGltfLoadError={this.handleGltfLoadError}
                 {...this.inputFiles}
                 ref={p => (this.preview = p)}
               />
@@ -794,7 +856,17 @@ class AvatarEditor extends Component {
             )}
             {!isAvaturnPrivateMode && this.state.uploadError && <p className="error-text">{this.state.uploadError}</p>}
             <div>
-              <button disabled={this.state.uploading} className="form-submit" type="submit">
+              <button
+                disabled={
+                  this.state.uploading ||
+                  (isAvaturnPrivateMode &&
+                    (!this.inputFiles.glb ||
+                      !this.state.previewReady ||
+                      !this.state.avatarSkeletonMetadata?.hasRequiredUpperBody))
+                }
+                className="form-submit"
+                type="submit"
+              >
                 {this.state.uploading ? (
                   <FormattedMessage id="avatar-editor.submit-button.uploading" defaultMessage="Subiendo..." />
                 ) : (

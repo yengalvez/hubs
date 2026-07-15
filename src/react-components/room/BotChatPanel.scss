@@ -223,6 +223,16 @@
     padding: 20px 8px;
   }
 
+  .privacyNotice {
+    padding: 9px 11px;
+    border: 1px solid rgba(79, 207, 255, 0.22);
+    border-radius: var(--mv-radius-sm);
+    background: rgba(14, 28, 52, 0.72);
+    color: var(--text2-color);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
   .composer {
     display: flex;
     flex-direction: column;

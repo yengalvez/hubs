@@ -111,6 +111,7 @@
   "bot-chat-panel.hint": "Enter para enviar. Shift+Enter para salto de línea.",
   "bot-chat-panel.input-placeholder": "Escribe un mensaje privado...",
   "bot-chat-panel.no-reply": "El bot no ha devuelto una respuesta.",
+  "bot-chat-panel.privacy-notice": "Conversación temporal: YenHubs no guarda el historial y se elimina al salir de la sala. El proveedor de IA procesa cada mensaje; no compartas datos personales.",
   "bot-chat-panel.request-failed": "No se ha podido contactar con el bot. Inténtalo de nuevo más tarde.",
   "bot-chat-panel.send": "Enviar",
   "bot-chat-panel.sign-in-required": "Debes iniciar sesión para usar el chat privado con bots.",

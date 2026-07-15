@@ -159,6 +159,13 @@ export function BotChatPanel({
           <div ref={messagesEndRef} />
         </div>
 
+        <div className={styles.privacyNotice} role="note">
+          <FormattedMessage
+            id="bot-chat-panel.privacy-notice"
+            defaultMessage="Conversación temporal: YenHubs no guarda el historial y se elimina al salir de la sala. El proveedor de IA procesa cada mensaje; no compartas datos personales."
+          />
+        </div>
+
         <form className={styles.composer} onSubmit={onSend}>
           <textarea
             className={styles.input}

@@ -178,6 +178,8 @@ export function waypointSystem(
 ) {
   if (exitedOwnedQuery(world).includes(myOccupiedWaypoint)) {
     myOccupiedWaypoint = 0;
+    characterController.cancelWaypointTravel();
+    moveToSpawnPoint(world, characterController);
   }
 
   // When a scene is opened with a named waypoint we have to make sure that the scene default waypoint

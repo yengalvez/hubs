@@ -85,6 +85,25 @@ export class CharacterControllerSystem {
   enqueueWaypointTravelTo(inTransform, isInstant, waypointComponentData) {
     this.waypoints.push({ transform: getPooledMatrix4().copy(inTransform), isInstant, waypointComponentData }); //TODO: don't create new object
   }
+
+  cancelWaypointTravel() {
+    if (this.activeWaypoint) {
+      freePooledMatrix4(this.activeWaypoint.transform);
+      this.activeWaypoint = null;
+    }
+
+    for (let i = 0; i < this.waypoints.length; i++) {
+      freePooledMatrix4(this.waypoints[i].transform);
+    }
+    this.waypoints.length = 0;
+    this.waypointTravelStartTime = 0;
+    this.waypointTravelTime = 0;
+    this.isMotionDisabled = false;
+    this.isTeleportingDisabled = false;
+    this.shouldUnoccupyWaypointsOnceMoving = false;
+    this.setSittingState(false);
+  }
+
   enqueueRelativeMotion(motion) {
     this.relativeMotion.add(motion);
   }
@@ -367,6 +386,7 @@ export class CharacterControllerSystem {
           } else {
             this.waypointSystem.releaseAnyOccupiedWaypoints();
           }
+          this.setSittingState(false);
           if (this.fly && this.shouldLandWhenPossible && shouldResnapToNavMesh && squareDistNavMeshCorrection < 3) {
             newPOV.setPosition(navMeshSnappedPOVPosition);
             this.shouldLandWhenPossible = false;

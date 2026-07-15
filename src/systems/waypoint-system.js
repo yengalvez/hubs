@@ -141,6 +141,7 @@ export class WaypointSystem {
     unoccupyWaypoints(this.ready);
     if (this.currentWaypoint) {
       this.currentWaypoint.el.removeEventListener("ownership-lost", this.lostOwnershipOfWaypoint);
+      this.currentWaypoint = null;
     }
   }
 
@@ -258,6 +259,9 @@ export class WaypointSystem {
   }
   lostOwnershipOfWaypoint(e) {
     if (this.currentWaypoint && this.currentWaypoint.el === e.detail.el) {
+      this.currentWaypoint.el.removeEventListener("ownership-lost", this.lostOwnershipOfWaypoint);
+      this.currentWaypoint = null;
+      this.characterController.cancelWaypointTravel();
       this.mightNeedRespawn = true;
       this.ownershipLostTime = performance.now();
     }

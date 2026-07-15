@@ -7,6 +7,8 @@ import { CloseButton } from "../input/CloseButton";
 import { Button } from "../input/Button";
 import styles from "./BotChatPanel.scss";
 
+const MAX_MESSAGE_LENGTH = 800;
+
 export function BotChatPanel({
   botName,
   messages,
@@ -162,7 +164,7 @@ export function BotChatPanel({
         <div className={styles.privacyNotice} role="note">
           <FormattedMessage
             id="bot-chat-panel.privacy-notice"
-            defaultMessage="Conversación temporal: YenHubs no guarda el historial y se elimina al salir de la sala. El proveedor de IA procesa cada mensaje; no compartas datos personales."
+            defaultMessage="Conversación temporal: YenHubs no conserva el historial y lo elimina al salir. OpenAI procesa cada mensaje y puede conservar registros de seguridad hasta 30 días; no compartas datos personales."
           />
         </div>
 
@@ -170,6 +172,7 @@ export function BotChatPanel({
           <textarea
             className={styles.input}
             rows={3}
+            maxLength={MAX_MESSAGE_LENGTH}
             value={inputValue}
             onChange={onInputChange}
             onKeyDown={e => {

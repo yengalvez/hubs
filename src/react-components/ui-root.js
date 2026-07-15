@@ -51,6 +51,7 @@ import { MicSetupModalContainer } from "./room/MicSetupModalContainer";
 import { InvitePopoverContainer } from "./room/InvitePopoverContainer";
 import { MoreMenuPopoverButton, CompactMoreMenuButton, MoreMenuContextProvider } from "./room/MoreMenuPopover";
 import { ChatSidebarContainer } from "./room/ChatSidebarContainer";
+import { LogMessageType } from "./room/ChatSidebar";
 import { ContentMenu, PeopleMenuButton, ObjectsMenuButton, ECSDebugMenuButton } from "./room/ContentMenu";
 import { ReactComponent as CameraIcon } from "./icons/Camera.svg";
 import { ReactComponent as AvatarIcon } from "./icons/Avatar.svg";
@@ -116,6 +117,7 @@ import {
 } from "../bit-systems/waypoint";
 import { findAncestorWithComponent, shouldUseNewLoader } from "../utils/bit-utils";
 
+const MAX_BOT_CHAT_MESSAGES_PER_CONVERSATION = 100;
 const avatarEditorDebug = qsTruthy("avatarEditorDebug");
 
 const IN_ROOM_MODAL_ROUTER_PATHS = ["/media"];
@@ -816,6 +818,10 @@ class UIRoot extends Component {
     }
   };
 
+  notifyNoSeatNearby = () => {
+    window.APP?.messageDispatch?.log(LogMessageType.noSeatNearby);
+  };
+
   sitAtNearestSeatWaypoint = async () => {
     const scene = this.props.scene;
     const maxDistSq = 2.0 * 2.0;
@@ -869,6 +875,7 @@ class UIRoot extends Component {
         return;
       }
 
+      this.notifyNoSeatNearby();
       return;
     }
 
@@ -890,7 +897,10 @@ class UIRoot extends Component {
     }
 
     candidates.sort((a, b) => a.distSq - b.distSq);
-    if (!candidates.length) return;
+    if (!candidates.length) {
+      this.notifyNoSeatNearby();
+      return;
+    }
 
     // Release any occupied spawnpoints before attempting to occupy a seat.
     waypointSystem.releaseAnyOccupiedWaypoints();
@@ -912,6 +922,8 @@ class UIRoot extends Component {
         return;
       }
     }
+
+    this.notifyNoSeatNearby();
   };
 
   standFromSeat = async () => {
@@ -1155,7 +1167,7 @@ class UIRoot extends Component {
       const updated = {
         ...existing,
         botName: botName || existing.botName || botId,
-        messages: [...(existing.messages || []), message]
+        messages: [...(existing.messages || []), message].slice(-MAX_BOT_CHAT_MESSAGES_PER_CONVERSATION)
       };
       return {
         botChatSessions: {

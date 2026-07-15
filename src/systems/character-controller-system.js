@@ -443,7 +443,7 @@ export class CharacterControllerSystem {
 
   findPositionOnNavMesh(start, end, outPos, shouldRecomputeGroupAndNode) {
     const pathfinder = this.scene.systems.nav.pathfinder;
-    if (!(NAV_ZONE in pathfinder.zones)) return;
+    if (!(NAV_ZONE in pathfinder.zones)) return outPos.copy(end);
     this.navGroup =
       shouldRecomputeGroupAndNode || this.navGroup === null
         ? pathfinder.getGroup(NAV_ZONE, end, true, true)

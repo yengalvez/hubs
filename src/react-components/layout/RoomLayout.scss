@@ -5,7 +5,7 @@
   width: 100%;
   height: 100%;
   grid-template-columns:
-    [main] auto
+    [main] minmax(0, 1fr)
     [sidebar] minmax(0, min-content);
 
   grid-template-rows:
@@ -19,6 +19,7 @@
 
 :local(.main) {
   grid-column-start: main;
+  min-width: 0;
 }
 
 :local(.sidebar) {
@@ -58,6 +59,7 @@
 :local(.toolbar) {
   grid-row-start: toolbar;
   grid-column-end: -1;
+  min-width: 0;
   pointer-events: auto;
   z-index: 3;
 }

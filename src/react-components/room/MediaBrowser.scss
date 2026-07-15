@@ -26,11 +26,19 @@
   padding-left: max(12px, env(safe-area-inset-left, 0px));
   padding-right: max(12px, env(safe-area-inset-right, 0px));
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 12px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
   flex-shrink: 0;
   border-bottom: 1px solid var(--mv-border);
   background-color: rgba(11, 20, 38, 0.97);
   -webkit-backdrop-filter: blur(var(--mv-blur-sm));
   backdrop-filter: blur(var(--mv-blur-sm));
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 :local(.button-nav) > * {

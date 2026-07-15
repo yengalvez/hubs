@@ -110,12 +110,17 @@
 
 @media (max-width: theme.$breakpoint-lg - 1), (max-height: theme.$breakpoint-vr - 1) {
   :local(.toolbar-button) {
-    width: 70px;
+    flex: 0 0 58px;
+    width: 58px;
+
+    label {
+      font-size: 10.5px;
+    }
   }
 
   :local(.icon-container) {
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
   }
 }
 

@@ -180,6 +180,12 @@
 
   p {
     font-size: theme.$font-size-sm;
+    line-height: 1.25;
+    max-width: 100%;
+    margin: 0;
+    padding: 0 8px;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
   }
 
   svg {

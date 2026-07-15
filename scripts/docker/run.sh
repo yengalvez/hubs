@@ -17,7 +17,15 @@ export turkeyCfg_ita_server="turkey"
 find /www/hubs/ -type f -name *.html -exec sed -i "s/{{rawhubs-base-assets-path}}\//${turkeyCfg_base_assets_path//\//\\\/}/g" {} \;           
 find /www/hubs/ -type f -name *.html -exec sed -i "s/{{rawhubs-base-assets-path}}/${turkeyCfg_base_assets_path//\//\\\/}/g" {} \; 
 find /www/hubs/ -type f -name *.css -exec sed -i "s/{{rawhubs-base-assets-path}}\//${turkeyCfg_base_assets_path//\//\\\/}/g" {} \; 
-find /www/hubs/ -type f -name *.css -exec sed -i "s/{{rawhubs-base-assets-path}}/${turkeyCfg_base_assets_path//\//\\\/}/g" {} \;             
+find /www/hubs/ -type f -name *.css -exec sed -i "s/{{rawhubs-base-assets-path}}/${turkeyCfg_base_assets_path//\//\\\/}/g" {} \;
+# Webpack emits imported asset URLs inside JavaScript bundles as well as HTML/CSS.
+find /www/hubs/ -type f -name *.js -exec sed -i "s/{{rawhubs-base-assets-path}}\//${turkeyCfg_base_assets_path//\//\\\/}/g" {} \;
+find /www/hubs/ -type f -name *.js -exec sed -i "s/{{rawhubs-base-assets-path}}/${turkeyCfg_base_assets_path//\//\\\/}/g" {} \;
+if find /www/hubs/ -type f \( -name '*.html' -o -name '*.css' -o -name '*.js' \) \
+    -exec grep -lF '{{rawhubs-base-assets-path}}' {} \; | grep -q .; then
+    echo "Unresolved base assets placeholder"
+    exit 1
+fi
 anchor="<!-- DO NOT REMOVE\/EDIT THIS COMMENT - META_TAGS -->" 
 for f in /www/hubs/pages/*.html; do 
     for var in $(printenv); do 

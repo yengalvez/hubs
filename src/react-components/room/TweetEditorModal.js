@@ -6,19 +6,16 @@ import { Button } from "../input/Button";
 import { Column } from "../layout/Column";
 import createEmojiPlugin from "@draft-js-plugins/emoji";
 import createHashtagPlugin from "@draft-js-plugins/hashtag";
-import createLinkifyPlugin from "@draft-js-plugins/linkify";
 import createCounterPlugin from "@draft-js-plugins/counter";
 import Editor from "@draft-js-plugins/editor";
 import "@draft-js-plugins/emoji/lib/plugin.css";
 import "@draft-js-plugins/hashtag/lib/plugin.css";
-import "@draft-js-plugins/linkify/lib/plugin.css";
 import "@draft-js-plugins/counter/lib/plugin.css";
 import styles from "./TweetEditorModal.scss";
 import { FormattedMessage } from "react-intl";
 
 const emojiPlugin = createEmojiPlugin();
 const hashtagPlugin = createHashtagPlugin();
-const linkifyPlugin = createLinkifyPlugin();
 const counterPlugin = createCounterPlugin();
 
 export function TweetEditorModal({
@@ -56,7 +53,7 @@ export function TweetEditorModal({
               ref={editorRef}
               editorState={editorState}
               onChange={onChange}
-              plugins={[emojiPlugin, hashtagPlugin, linkifyPlugin, counterPlugin]}
+              plugins={[emojiPlugin, hashtagPlugin, counterPlugin]}
             />
           </div>
 

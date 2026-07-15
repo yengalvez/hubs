@@ -7,7 +7,7 @@ import HubsTextureLoader from "../loaders/HubsTextureLoader";
 import { validMaterials } from "../components/hoverable-visuals";
 import { isNonCorsProxyDomain, proxiedUrlFor, guessContentType } from "../utils/media-url-utils";
 import { isIOS as detectIOS } from "./is-mobile";
-import Linkify from "linkify-it";
+import { LinkifyIt } from "linkify-it";
 import tlds from "tlds";
 import { mediaTypeFor } from "./media-type";
 import { MediaPlayer } from "dashjs";
@@ -40,7 +40,7 @@ export function mediaTypeName(type) {
   return MediaTypeName.get(type) || "unknown";
 }
 
-const linkify = Linkify();
+const linkify = new LinkifyIt({ fuzzyLink: true });
 linkify.tlds(tlds);
 
 const mediaAPIEndpoint = getReticulumFetchUrl("/api/v1/media");

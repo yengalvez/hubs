@@ -300,10 +300,8 @@ module.exports = async (env, argv) => {
         bitecs$: path.resolve(__dirname, "./node_modules/bitecs/dist/index.mjs"),
 
         // UMD libraries that need explicit module resolution to work with ES6 imports
-        "js-cookie": path.resolve(__dirname, "./node_modules/js-cookie/src/js.cookie.js"),
         "jwt-decode": path.resolve(__dirname, "./node_modules/jwt-decode/lib/index.js"),
         "event-target-shim": path.resolve(__dirname, "./node_modules/event-target-shim/dist/event-target-shim.mjs"),
-        "linkify-it": path.resolve(__dirname, "./node_modules/linkify-it/index.js"),
         "hls.js": path.resolve(__dirname, "./node_modules/hls.js/dist/hls.js"),
         "url-toolkit": path.resolve(__dirname, "./node_modules/url-toolkit/src/url-toolkit.js"),
 

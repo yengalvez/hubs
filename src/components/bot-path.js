@@ -1,8 +1,9 @@
+import { MonotonicServerClock } from "../utils/monotonic-server-clock";
+
 const { Vector3, Euler, Quaternion, MathUtils } = THREE;
 
 const TURN_DURATION_MS = 300;
 const BOT_RENDER_DELAY_MS = 250;
-const SERVER_TIME_SMOOTHING = 0.1;
 
 function getBotYawOffsetDeg(el) {
   const raw = el && el.dataset ? el.dataset.botYawOffsetDeg : null;
@@ -67,8 +68,7 @@ AFRAME.registerComponent("bot-path", {
     this._pending = null;
     this._hasApplied = false;
     this._hasShown = false;
-    this._smoothedOffsetMs = 0;
-    this._lastNowMs = 0;
+    this._serverClock = new MonotonicServerClock();
   },
 
   isMine() {
@@ -81,28 +81,13 @@ AFRAME.registerComponent("bot-path", {
     if (conn && typeof conn.getServerTime === "function") {
       return conn.getServerTime();
     }
-    return performance.now();
+    // Segment timestamps use epoch milliseconds. Date.now() keeps the fallback in the same
+    // time domain until the Networked-Aframe server clock is available.
+    return Date.now();
   },
 
   getNowMs() {
-    const perfNow = performance.now();
-    const rawNow = this.getRawServerTimeMs();
-
-    const offset = rawNow - perfNow;
-    if (!Number.isFinite(this._smoothedOffsetMs)) {
-      this._smoothedOffsetMs = Number.isFinite(offset) ? offset : 0;
-    } else if (Number.isFinite(offset)) {
-      this._smoothedOffsetMs += (offset - this._smoothedOffsetMs) * SERVER_TIME_SMOOTHING;
-    }
-
-    let now = perfNow + this._smoothedOffsetMs;
-    if (!Number.isFinite(now)) now = rawNow;
-
-    // Ensure time never goes backwards, even if the server time offset is corrected.
-    if (now < this._lastNowMs) now = this._lastNowMs;
-    this._lastNowMs = now;
-
-    return now;
+    return this._serverClock.now(performance.now(), this.getRawServerTimeMs());
   },
 
   applyTransform() {

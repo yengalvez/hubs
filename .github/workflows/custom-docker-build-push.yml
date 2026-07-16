@@ -1,5 +1,4 @@
 # Based on the workflow by Brandon Patterson from https://github.com/mikemorran/hubs/blob/master/.github/workflows/ce-build.yml
-# Input masking referenced from https://dev.to/leading-edje/masking-input-parameters-in-github-actions-1ci
 
 # Common registry base URLs:
 # Docker Hub: docker.io
@@ -13,8 +12,6 @@ on:
       Override_Registry_Base_URL:
         type: string
       Override_Registry_Username:
-        type: string
-      Override_Registry_Password:
         type: string
       Override_Registry_Namespace:
         type: string
@@ -64,12 +61,11 @@ jobs:
       - name: Assign username from input
         if: ${{ inputs.Override_Registry_Username != ''}}
         run: |
-          USERNAME=$(jq -r '.inputs.Override_Registry_Username' $GITHUB_EVENT_PATH)
-          echo ::add-mask::$USERNAME
-          echo Registry_Username=$USERNAME >> $GITHUB_ENV
+          USERNAME=$(jq -r '.inputs.Override_Registry_Username' "$GITHUB_EVENT_PATH")
+          echo "::add-mask::$USERNAME"
+          echo "Registry_Username=$USERNAME" >> "$GITHUB_ENV"
 
       - name: Assign password from secret
-        if: ${{ inputs.Override_Registry_Password == ''}}
         run: |
           PASSWORD="${{ secrets.REGISTRY_PASSWORD }}"
           # If no registry password secret is configured, default to the workflow token.
@@ -78,13 +74,6 @@ jobs:
             PASSWORD="${{ secrets.GITHUB_TOKEN }}"
           fi
           echo "Registry_Password=$PASSWORD" >> "$GITHUB_ENV"
-
-      - name: Assign password from input
-        if: ${{ inputs.Override_Registry_Password != ''}}
-        run: |
-          PASSWORD=$(jq -r '.inputs.Override_Registry_Password' $GITHUB_EVENT_PATH)
-          echo ::add-mask::$PASSWORD
-          echo Registry_Password=$PASSWORD >> $GITHUB_ENV
 
       - name: Add the repository name as an env variable # Lowercase is forced to prevent errors.
         run: |

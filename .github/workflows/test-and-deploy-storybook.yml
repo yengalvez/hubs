@@ -17,9 +17,13 @@ jobs:
 
       - run: npm ci
       - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run build
 
       - run: cd admin && npm ci --legacy-peer-deps
       - run: cd admin && npm test
+      - run: cd admin && npm audit --omit=dev --audit-level=high
+      - run: cd admin && npm run build
 
       - if: ${{ github.ref == 'refs/heads/master' }}
         run: npm run deploy-storybook -- --ci

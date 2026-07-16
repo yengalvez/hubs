@@ -8,7 +8,7 @@ import { showFullScreenIfWasFullScreen } from "../utils/fullscreen";
 import { AvatarUrlModalContainer } from "./room/AvatarUrlModalContainer";
 import { SceneUrlModalContainer } from "./room/SceneUrlModalContainer";
 import { ObjectUrlModalContainer } from "./room/ObjectUrlModalContainer";
-import { AvaturnHelpModal } from "./room/AvaturnHelpModal";
+import { PrivateGlbHelpModal } from "./room/PrivateGlbHelpModal";
 import { MediaBrowser } from "./room/MediaBrowser";
 import { IconButton } from "./input/IconButton";
 import { ReactComponent as UploadIcon } from "./icons/Upload.svg";
@@ -370,12 +370,12 @@ class MediaBrowserContainer extends Component {
     window.dispatchEvent(new CustomEvent("action_create_avatar"));
   };
 
-  onCreateAvaturnAvatar = () => {
-    window.dispatchEvent(new CustomEvent("action_create_avaturn_avatar"));
+  onCreatePrivateGlbAvatar = () => {
+    window.dispatchEvent(new CustomEvent("action_create_private_glb_avatar"));
   };
 
-  onShowAvaturnHelp = () => {
-    this.props.showNonHistoriedDialog(AvaturnHelpModal);
+  onShowPrivateGlbHelp = () => {
+    this.props.showNonHistoriedDialog(PrivateGlbHelpModal);
   };
 
   processThumbnailUrl = (entry, thumbnailWidth, thumbnailHeight) => {
@@ -534,22 +534,19 @@ class MediaBrowserContainer extends Component {
                 />
                 <CreateTile
                   type="avatar"
-                  onClick={this.onCreateAvaturnAvatar}
+                  onClick={this.onCreatePrivateGlbAvatar}
                   icon={<UploadIcon />}
                   tone="upload"
                   label={
-                    <FormattedMessage
-                      id="media-browser.create-avaturn-private"
-                      defaultMessage="Subir Avaturn (privado)"
-                    />
+                    <FormattedMessage id="media-browser.create-private-glb" defaultMessage="Subir GLB (privado)" />
                   }
                 />
                 <CreateTile
                   type="avatar"
-                  onClick={this.onShowAvaturnHelp}
+                  onClick={this.onShowPrivateGlbHelp}
                   icon={<HelpIcon />}
                   tone="help"
-                  label={<FormattedMessage id="media-browser.avaturn-help" defaultMessage="Guía Avaturn" />}
+                  label={<FormattedMessage id="media-browser.private-glb-help" defaultMessage="Guía GLB" />}
                 />
               </>
             )}

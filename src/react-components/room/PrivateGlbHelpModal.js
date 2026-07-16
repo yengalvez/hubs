@@ -3,70 +3,59 @@ import PropTypes from "prop-types";
 import { FormattedMessage } from "react-intl";
 import { Modal } from "../modal/Modal";
 import { CloseButton } from "../input/CloseButton";
-import { Button } from "../input/Button";
 import { Column } from "../layout/Column";
-import styles from "./AvaturnHelpModal.scss";
+import styles from "./PrivateGlbHelpModal.scss";
 
-export function AvaturnHelpModal({ onClose }) {
+export function PrivateGlbHelpModal({ onClose }) {
   return (
     <Modal
-      title={<FormattedMessage id="avaturn-help-modal.title" defaultMessage="Cómo subir tu avatar de Avaturn" />}
+      title={<FormattedMessage id="private-glb-help-modal.title" defaultMessage="Cómo subir un avatar GLB privado" />}
       beforeTitle={<CloseButton onClick={onClose} />}
     >
       <Column padding className={styles.content}>
         <p className={styles.intro}>
           <FormattedMessage
-            id="avaturn-help-modal.intro"
+            id="private-glb-help-modal.intro"
             defaultMessage="Este flujo sube tu avatar como privado en tu cuenta, para elegirlo desde Mis avatares."
           />
         </p>
         <ol className={styles.steps}>
           <li className={styles.step}>
             <FormattedMessage
-              id="avaturn-help-modal.step-1"
-              defaultMessage="Crea o abre tu avatar en Avaturn y expórtalo como .glb."
+              id="private-glb-help-modal.step-1"
+              defaultMessage="Crea o exporta un avatar compatible desde la herramienta que elijas en formato .glb."
             />
           </li>
           <li className={styles.step}>
             <FormattedMessage
-              id="avaturn-help-modal.step-2"
-              defaultMessage="En Hubs, abre Cambiar avatar y pulsa Subir Avaturn (privado)."
+              id="private-glb-help-modal.step-2"
+              defaultMessage="En Hubs, abre Cambiar avatar y pulsa Subir GLB (privado)."
             />
           </li>
           <li className={styles.step}>
             <FormattedMessage
-              id="avaturn-help-modal.step-3"
+              id="private-glb-help-modal.step-3"
               defaultMessage="Pon un nombre, selecciona tu archivo .glb y guarda."
             />
           </li>
           <li className={styles.step}>
             <FormattedMessage
-              id="avaturn-help-modal.step-4"
+              id="private-glb-help-modal.step-4"
               defaultMessage="Selecciona el avatar en Mis avatares para usarlo en la sala."
             />
           </li>
         </ol>
         <p className={styles.note}>
           <FormattedMessage
-            id="avaturn-help-modal.note"
-            defaultMessage="Nota: este flujo no publica el avatar en listados destacados."
+            id="private-glb-help-modal.note"
+            defaultMessage="Este flujo no publica el avatar en listados destacados. Revisa por separado la licencia y privacidad de la herramienta con la que lo creaste."
           />
         </p>
-        <Button
-          className={styles.link}
-          as="a"
-          href="https://docs.avaturn.me/docs"
-          target="_blank"
-          rel="noopener noreferrer"
-          preset="primary"
-        >
-          <FormattedMessage id="avaturn-help-modal.link" defaultMessage="Abrir documentación oficial de Avaturn" />
-        </Button>
       </Column>
     </Modal>
   );
 }
 
-AvaturnHelpModal.propTypes = {
+PrivateGlbHelpModal.propTypes = {
   onClose: PropTypes.func
 };

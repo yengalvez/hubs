@@ -871,13 +871,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     );
   });
 
-  window.addEventListener("action_create_avaturn_avatar", () => {
+  const createPrivateGlbAvatar = () => {
     performConditionalSignIn(
       () => hubChannel.signedIn,
-      () => pushHistoryState(history, "overlay", "avatar-editor", { mode: "avaturn-private" }),
+      () => pushHistoryState(history, "overlay", "avatar-editor", { mode: "private-glb" }),
       SignInMessages.createAvatar
     );
-  });
+  };
+  window.addEventListener("action_create_private_glb_avatar", createPrivateGlbAvatar);
+  // Compatibility with bookmarks or extensions that used the original vendor-specific event.
+  window.addEventListener("action_create_avaturn_avatar", createPrivateGlbAvatar);
 
   scene.addEventListener("scene_media_selected", e => {
     const sceneInfo = e.detail;

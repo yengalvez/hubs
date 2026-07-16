@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import configs from "../utils/configs";
+import { isAuthenticatedBotRunnerPresence } from "../utils/bot-runner-auth-utils";
 import { fetchReticulumAuthenticated } from "../utils/phoenix-utils";
 import qsTruthy from "../utils/qs_truthy";
 
@@ -63,8 +64,9 @@ const MOBILITY_BEHAVIOR = {
 
 AFRAME.registerSystem("bot-runner-system", {
   init() {
-    this.enabled = !!configs.feature("enable_room_bots") && qsTruthy("bot_runner");
-    this.debug = this.enabled && qsTruthy("bot_debug");
+    this.runnerRequested = !!configs.feature("enable_room_bots") && qsTruthy("bot_runner");
+    this.enabled = false;
+    this.debug = this.runnerRequested && qsTruthy("bot_debug");
     this.bots = new Map();
     this.reservedTargets = new Map();
     this.avatarRefs = [];
@@ -94,15 +96,13 @@ AFRAME.registerSystem("bot-runner-system", {
     this.onHubUpdated = this.onHubUpdated.bind(this);
     this.onMessage = this.onMessage.bind(this);
 
-    if (!this.enabled) return;
+    if (!this.runnerRequested) return;
 
     this.el.sceneEl.addEventListener("hub_updated", this.onHubUpdated);
 
     if (window.APP && window.APP.messageDispatch) {
       window.APP.messageDispatch.addEventListener("message", this.onMessage);
     }
-
-    this.refreshFeaturedAvatarIds();
   },
 
   remove() {
@@ -116,12 +116,14 @@ AFRAME.registerSystem("bot-runner-system", {
   },
 
   onHubUpdated() {
+    if (!this.refreshAuthorization()) return;
+
     this.refreshPatrolPoints();
     this.reconcileBots(true);
   },
 
   onMessage(e) {
-    if (!this.enabled) return;
+    if (!this.refreshAuthorization()) return;
 
     const message = e && e.detail;
     if (!message || message.type !== BOT_COMMAND_TYPE) return;
@@ -130,6 +132,31 @@ AFRAME.registerSystem("bot-runner-system", {
     if (!body || typeof body !== "object") return;
 
     this.handleBotCommand(body);
+  },
+
+  hasAuthenticatedPresence() {
+    const presenceState = window.APP?.hubChannel?.presence?.state;
+    const sessionId = window.NAF?.clientId;
+    return isAuthenticatedBotRunnerPresence(presenceState, sessionId);
+  },
+
+  refreshAuthorization() {
+    const authorized = this.runnerRequested && this.hasAuthenticatedPresence();
+    if (authorized === this.enabled) return authorized;
+
+    this.enabled = authorized;
+
+    if (!authorized) {
+      this._wasConnected = false;
+      this.clearBots();
+      this._knownOccupants.clear();
+      return false;
+    }
+
+    this.lastConfigRefreshAt = 0;
+    this.lastFeaturedAvatarRefreshAt = 0;
+    this.refreshFeaturedAvatarIds();
+    return true;
   },
 
   getRoomBotsConfig() {
@@ -467,6 +494,10 @@ AFRAME.registerSystem("bot-runner-system", {
   },
 
   createBot(botId, config) {
+    // Presence is the server-authenticated source of truth. Recheck at the final
+    // synchronous creation boundary so a query string can never create a bot.
+    if (!this.runnerRequested || !this.hasAuthenticatedPresence()) return;
+
     const startPoint = this.pickSpawnPoint(botId);
     const startPos = startPoint ? this.positionForSpawnPoint(startPoint, botId) : new THREE.Vector3();
     const avatarId = this.pickAvatarId(botId);
@@ -576,7 +607,7 @@ AFRAME.registerSystem("bot-runner-system", {
   },
 
   reconcileBots(force = false) {
-    if (!this.enabled) return;
+    if (!this.refreshAuthorization()) return;
 
     const config = this.getRoomBotsConfig();
     if (!config.enabled || config.count === 0) {
@@ -764,7 +795,8 @@ AFRAME.registerSystem("bot-runner-system", {
   },
 
   tick(t) {
-    if (!this.enabled) return;
+    if (!this.runnerRequested) return;
+    if (!this.refreshAuthorization()) return;
     if (!this.el.sceneEl.is("entered")) return;
 
     const connection = window.NAF && window.NAF.connection;

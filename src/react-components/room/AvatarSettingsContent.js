@@ -4,7 +4,7 @@ import { Button, AcceptButton } from "../input/Button";
 import styles from "./AvatarSettingsContent.scss";
 import { TextInputField } from "../input/TextInputField";
 import { Column } from "../layout/Column";
-import { FormattedMessage } from "react-intl";
+import { FormattedMessage, useIntl } from "react-intl";
 
 export function AvatarSettingsContent({
   displayName,
@@ -20,6 +20,8 @@ export function AvatarSettingsContent({
   onChangeAvatar,
   ...rest
 }) {
+  const intl = useIntl();
+
   return (
     <Column as="form" className={styles.content} {...rest}>
       <TextInputField
@@ -27,7 +29,10 @@ export function AvatarSettingsContent({
         label={<FormattedMessage id="avatar-settings-content.display-name-label" defaultMessage="Display Name" />}
         value={displayName}
         pattern={displayNamePattern}
-        placeholder="displayed over your avatar"
+        placeholder={intl.formatMessage({
+          id: "avatar-settings-content.display-name-placeholder",
+          defaultMessage: "Displayed over your avatar"
+        })}
         spellCheck="false"
         required
         onChange={onChangeDisplayName}
@@ -43,7 +48,10 @@ export function AvatarSettingsContent({
         label={<FormattedMessage id="avatar-settings-content.pronouns-label" defaultMessage="Pronouns (optional)" />}
         value={pronouns}
         pattern={pronounsPattern}
-        placeholder="slash, comma or space separated"
+        placeholder={intl.formatMessage({
+          id: "avatar-settings-content.pronouns-placeholder",
+          defaultMessage: "Slash, comma or space separated"
+        })}
         spellCheck="false"
         onChange={onChangePronouns}
         ref={pronounsInputRef}

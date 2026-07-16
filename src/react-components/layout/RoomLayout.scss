@@ -15,6 +15,14 @@
   overflow: hidden;
   position: relative;
   pointer-events: none;
+
+  @media (max-width: theme.$breakpoint-lg - 1), (max-height: theme.$breakpoint-vr - 1) {
+    // Sidebars are fixed overlays at these sizes. Keeping a zero-width grid
+    // track prevents toolbar min-content from widening the 3D viewport.
+    grid-template-columns:
+      [main] minmax(0, 1fr)
+      [sidebar] 0;
+  }
 }
 
 :local(.main) {
@@ -59,7 +67,11 @@
 :local(.toolbar) {
   grid-row-start: toolbar;
   grid-column-end: -1;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
   pointer-events: auto;
   z-index: 3;
 }

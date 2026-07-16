@@ -14,6 +14,7 @@ export function RoomLayout({
   toolbarRight,
   toolbarClassName,
   modal,
+  modalActive,
   viewport,
   objectFocused,
   streaming,
@@ -24,7 +25,7 @@ export function RoomLayout({
     <div
       className={classNames(
         styles.roomLayout,
-        { [styles.objectFocused]: objectFocused, [styles.hasModal]: !!modal },
+        { [styles.objectFocused]: objectFocused, [styles.hasModal]: modalActive || !!modal },
         className
       )}
       {...rest}
@@ -59,6 +60,7 @@ RoomLayout.propTypes = {
   toolbarRight: PropTypes.node,
   toolbarClassName: PropTypes.string,
   modal: PropTypes.node,
+  modalActive: PropTypes.bool,
   viewport: PropTypes.node,
   objectFocused: PropTypes.bool,
   streaming: PropTypes.bool,

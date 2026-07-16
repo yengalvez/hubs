@@ -1934,6 +1934,7 @@ class UIRoot extends Component {
                 scene={this.props.scene}
                 store={this.props.store}
                 objectFocused={!!this.props.selectedObject}
+                modalActive={renderEntryFlow}
                 streaming={streaming}
                 viewport={
                   <>

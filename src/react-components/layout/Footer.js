@@ -1,6 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
-import { FormattedMessage } from "react-intl";
+import { FormattedMessage, useIntl } from "react-intl";
 import styles from "./Footer.scss";
 import discordLogoUrl from "../../assets/images/discord-logo-small.png";
 import { Container } from "./Container";
@@ -18,6 +18,8 @@ export function Footer({
   appName,
   isHmc
 }) {
+  const intl = useIntl();
+
   return (
     <footer>
       <Container as="div" className={styles.container}>
@@ -92,7 +94,10 @@ export function Footer({
                 <img
                   className={styles.companyLogo}
                   src={companyLogoUrl}
-                  alt={<FormattedMessage id="footer.logo-alt" defaultMessage="Logo" />}
+                  alt={intl.formatMessage({ id: "footer.logo-alt", defaultMessage: "Logo" })}
+                  onError={event => {
+                    event.currentTarget.hidden = true;
+                  }}
                 />
               </li>
             )}

@@ -1,24 +1,30 @@
 @use "../styles/theme.scss";
 
+:local(.room-entry-modal) {
+  max-width: 430px;
+  border-color: rgba(115, 191, 255, 0.34);
+}
+
 :local(.content) {
-  padding: 24px 8px;
+  padding: 28px 26px 30px;
 
   button {
-    width: 156px;
+    width: 100%;
+    min-width: 0;
   }
 
   @media (min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
-    padding: 24px;
+    padding: 30px 34px 34px;
   }
 }
 
 :local(.logo) {
   height: auto;
-  max-width: 260px;
-  max-height: 140px;
+  max-width: 210px;
+  max-height: 96px;
   object-fit: contain;
   object-position: center;
-  margin: 16px 16px 32px;
+  margin: 2px 16px 26px;
   filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.45));
 }
 
@@ -28,32 +34,36 @@
   align-items: center;
 
   h5 {
-    font-size: theme.$font-size-xs;
+    font-size: 10px;
     color: theme.$text3-color;
     margin-bottom: 4px;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.11em;
     text-transform: uppercase;
   }
 
   p {
-    font-size: theme.$font-size-sm;
+    margin: 0 0 20px;
+    font-size: 18px;
+    font-weight: 600;
     text-align: center;
     color: theme.$text1-color;
 
     @media (min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
-      font-size: 20px;
+      font-size: 22px;
     }
   }
 }
 
 :local(.buttons) {
-  button {
-    margin-left: 16px;
-    margin-right: 16px;
+  width: min(100%, 250px);
+  gap: 10px;
 
-    @media (min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
-      margin-left: 8px;
-      margin-right: 8px;
-    }
+  button {
+    margin: 0;
+  }
+
+  hr {
+    width: 100%;
+    margin: 12px 0 2px;
   }
 }

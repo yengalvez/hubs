@@ -3,11 +3,15 @@
 :local(.tip) {
   pointer-events: all;
   min-height: 48px;
-  background-color: theme.$accent4-color;
-  border-radius: 16px;
+  background: var(--mv-panel-elevated);
+  border: 1px solid rgba(55, 217, 255, 0.28);
+  border-radius: var(--mv-radius-md);
   display: flex;
-  color: theme.$text4-color;
+  color: theme.$text1-color;
   align-items: center;
+  box-shadow: var(--mv-shadow-1), var(--mv-glow);
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
 
   @media (min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
     bottom: 24px;
@@ -16,7 +20,7 @@
 }
 
 :local(.content) {
-  margin: 16px;
+  margin: 12px 14px;
   font-size: theme.$font-size-md;
   font-weight: theme.$font-weight-bold;
   padding: 0 8px;
@@ -24,29 +28,29 @@
 }
 
 :local(.dismiss-button) {
-  background: none;
+  background: rgba(55, 217, 255, 0.1);
   height: 32px;
   border-radius: 16px;
   padding: 0 8px;
   display: flex;
   justify-content: center;
   align-items: center;
-  border: 1px solid theme.$accent4-color-pressed;
-  margin-right: 8px;
-  margin-bottom: 8px;
+  border: 1px solid rgba(55, 217, 255, 0.3);
+  margin-right: 10px;
+  margin-bottom: 10px;
   min-width: 48px;
   font-size: theme.$font-size-md;
   font-weight: theme.$font-weight-bold;
   align-self: flex-end;
 
   &:hover {
-    border-color: theme.$accent4-color-hover;
-    background-color: theme.$accent4-color-hover;
+    border-color: var(--mv-border-strong);
+    background-color: rgba(55, 217, 255, 0.18);
   }
 
   &:active {
-    border-color: theme.$accent4-color-pressed;
-    background-color: theme.$accent4-color-pressed;
+    border-color: var(--mv-accent-1);
+    background-color: rgba(55, 217, 255, 0.24);
   }
 }
 

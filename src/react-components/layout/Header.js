@@ -93,7 +93,7 @@ export function Header({
         <div className={styles.signIn}>
           {isSignedIn ? (
             <div>
-              <span>
+              <span title={email}>
                 <FormattedMessage
                   id="header.signed-in-as"
                   defaultMessage="Signed in as {email}"

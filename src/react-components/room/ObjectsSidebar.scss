@@ -2,9 +2,11 @@
 
 :local(.object) {
   font-size: theme.$font-size-sm;
-  padding: 8px 10px;
+  min-height: 42px;
+  padding: 9px 11px;
   border-radius: var(--mv-radius-sm);
-  border: 1px solid transparent;
+  border: 1px solid rgba(127, 181, 255, 0.1);
+  background: rgba(8, 17, 33, 0.4);
 
   & > * {
     margin-right: 8px;

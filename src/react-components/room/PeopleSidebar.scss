@@ -4,9 +4,11 @@
   font-size: theme.$font-size-sm;
   color: theme.$text1-color;
   position: relative;
-  padding: 8px 10px;
+  min-height: 44px;
+  padding: 9px 11px;
   border-radius: var(--mv-radius-sm);
-  border: 1px solid transparent;
+  border: 1px solid rgba(127, 181, 255, 0.1);
+  background: rgba(8, 17, 33, 0.4);
 
   & > * {
     margin-right: 8px;
@@ -30,4 +32,6 @@
   display: flex;
   flex: 1;
   justify-content: flex-end;
+  color: theme.$text3-color;
+  font-size: 10px;
 }

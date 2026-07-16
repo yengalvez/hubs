@@ -25,7 +25,11 @@ export function RoomLayout({
     <div
       className={classNames(
         styles.roomLayout,
-        { [styles.objectFocused]: objectFocused, [styles.hasModal]: modalActive || !!modal },
+        {
+          [styles.objectFocused]: objectFocused,
+          [styles.hasModal]: modalActive || !!modal,
+          [styles.hasSidebar]: !!sidebar
+        },
         className
       )}
       {...rest}

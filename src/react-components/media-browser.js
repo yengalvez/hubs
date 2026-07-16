@@ -13,6 +13,8 @@ import { MediaBrowser } from "./room/MediaBrowser";
 import { IconButton } from "./input/IconButton";
 import { ReactComponent as UploadIcon } from "./icons/Upload.svg";
 import { ReactComponent as LinkIcon } from "./icons/Link.svg";
+import { ReactComponent as AvatarIcon } from "./icons/Avatar.svg";
+import { ReactComponent as HelpIcon } from "./icons/Help.svg";
 import { remixAvatar } from "../utils/avatar-utils";
 import { fetchReticulumAuthenticated, getReticulumFetchUrl } from "../utils/phoenix-utils";
 import { proxiedUrlFor, scaledThumbnailUrlFor } from "../utils/media-url-utils";
@@ -527,11 +529,14 @@ class MediaBrowserContainer extends Component {
                 <CreateTile
                   type="avatar"
                   onClick={this.onCreateAvatar}
+                  icon={<AvatarIcon />}
                   label={<FormattedMessage id="media-browser.create-avatar" defaultMessage="Crear avatar" />}
                 />
                 <CreateTile
                   type="avatar"
                   onClick={this.onCreateAvaturnAvatar}
+                  icon={<UploadIcon />}
+                  tone="upload"
                   label={
                     <FormattedMessage
                       id="media-browser.create-avaturn-private"
@@ -542,6 +547,8 @@ class MediaBrowserContainer extends Component {
                 <CreateTile
                   type="avatar"
                   onClick={this.onShowAvaturnHelp}
+                  icon={<HelpIcon />}
+                  tone="help"
                   label={<FormattedMessage id="media-browser.avaturn-help" defaultMessage="Guía Avaturn" />}
                 />
               </>

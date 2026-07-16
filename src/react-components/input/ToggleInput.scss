@@ -5,6 +5,7 @@
   align-items: center;
   cursor: pointer;
   user-select: none;
+  min-width: 0;
 
   input {
     position: absolute;
@@ -25,17 +26,19 @@
 }
 
 :local(.label-container) {
-  margin-left: 16px;
+  margin-left: 12px;
   display: flex;
   flex-direction: column;
 }
 
 :local(.label) {
   font-size: theme.$font-size-sm;
+  font-weight: 700;
+  color: theme.$text1-color;
 }
 
 :local(.description) {
-  margin-top: 8px;
+  margin-top: 4px;
   font-size: theme.$font-size-xs;
   font-weight: theme.$font-weight-regular;
   color: theme.$text3-color;
@@ -47,7 +50,8 @@
   height: 24px;
   border: 1px solid theme.$radio-border-color;
   border-radius: 44px;
-  background: rgba(14, 24, 44, 0.8);
+  flex: 0 0 auto;
+  background: rgba(5, 12, 25, 0.88);
   -webkit-backdrop-filter: blur(var(--mv-blur-sm));
   backdrop-filter: blur(var(--mv-blur-sm));
 }
@@ -59,16 +63,18 @@
   width: 20px;
   height: 20px;
   border-radius: 20px;
-  background: linear-gradient(120deg, #8ac3ff 0%, #5f93ff 100%);
+  background: linear-gradient(120deg, #9ab1d0 0%, #647b9f 100%);
   transition: left 0.15s ease, right 0.15s ease, background-color 0.15s ease;
 }
 
 :local(.toggle-input) input:checked + :local(.track) {
-  background: rgba(19, 43, 82, 0.9);
+  border-color: rgba(55, 217, 255, 0.46);
+  background: rgba(27, 75, 112, 0.72);
 }
 
 :local(.toggle-input) input:checked + :local(.track) :local(.button) {
   left: auto;
   right: 1px;
-  background: linear-gradient(120deg, #26d1ff 0%, #3f7bff 100%);
+  background: linear-gradient(120deg, var(--mv-accent-1) 0%, var(--mv-accent-2) 100%);
+  box-shadow: 0 0 16px rgba(55, 217, 255, 0.3);
 }

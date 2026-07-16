@@ -6,8 +6,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 74px;
-  gap: 6px;
+  width: 62px;
+  gap: 4px;
   justify-content: center;
 
   label {
@@ -16,11 +16,11 @@
     margin: 0;
     width: 100%;
     text-align: center;
-    min-height: 28px;
+    min-height: 24px;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 11.5px;
+    font-size: 10.5px;
     font-weight: 700;
     line-height: 1.25;
     letter-spacing: 0.01em;
@@ -40,20 +40,20 @@
 :local(.icon-container) {
   position: relative;
   border-radius: var(--mv-radius-pill);
-  width: 58px;
-  height: 58px;
+  width: 44px;
+  height: 44px;
   line-height: 0;
   padding: 0;
   display: grid;
   place-items: center;
   margin: 0 auto;
   border: 1px solid theme.$toolbar-basic-border-color;
-  background: rgba(16, 27, 50, 0.76);
-  box-shadow: var(--mv-shadow-1);
+  background: rgba(18, 34, 61, 0.78);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   -webkit-backdrop-filter: blur(var(--mv-blur-sm));
   backdrop-filter: blur(var(--mv-blur-sm));
 
-  transition: transform 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
+  transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 
   & > * {
     grid-area: 1 / 1;
@@ -63,8 +63,8 @@
     display: block;
     flex: 0 0 auto;
     color: theme.$toolbar-icon-color;
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
 
     *[stroke="#000"] {
       transition: stroke 0.1s ease-in-out;
@@ -110,17 +110,18 @@
 
 @media (max-width: theme.$breakpoint-lg - 1), (max-height: theme.$breakpoint-vr - 1) {
   :local(.toolbar-button) {
-    flex: 0 0 58px;
-    width: 58px;
+    flex: 0 0 56px;
+    width: 56px;
 
     label {
-      font-size: 10.5px;
+      font-size: 9.5px;
+      min-height: 22px;
     }
   }
 
   :local(.icon-container) {
-    width: 48px;
-    height: 48px;
+    width: 42px;
+    height: 42px;
   }
 }
 
@@ -130,7 +131,8 @@
 :local(.accept),
 :local(.cancel) {
   &:hover :local(.icon-container) {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(55, 217, 255, 0.1);
   }
 
   &:active :local(.icon-container) {

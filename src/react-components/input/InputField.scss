@@ -1,9 +1,14 @@
 @use "../styles/theme";
 
 :local(.label) {
-  margin-bottom: 8px;
-  color: theme.$text3-color;
+  margin-bottom: 7px;
+  color: theme.$text2-color;
   align-self: flex-start;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
 }
 
 :local(.input-field) {
@@ -12,7 +17,7 @@
   width: 100%;
   max-width: 300px;
   white-space: break-spaces;
-  line-height: 1.2rem;
+  line-height: 1.3rem;
 }
 
 :local(.fullWidth) {

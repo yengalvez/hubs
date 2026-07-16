@@ -9,22 +9,27 @@
   right: 0;
   top: 0;
   bottom: 0;
-  background-color: rgba(7, 13, 25, 0.94);
+  background: radial-gradient(100% 80% at 12% 0%, rgba(24, 59, 109, 0.3), transparent 62%), var(--mv-bg-0);
   -webkit-backdrop-filter: blur(var(--mv-blur-lg));
   backdrop-filter: blur(var(--mv-blur-lg));
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
     env(safe-area-inset-left, 0px);
-  z-index: 10;
+  z-index: var(--mv-z-fullscreen);
+  animation: fullscreen-in 180ms ease-out both;
 }
 
 :local(.header) {
   position: relative;
-  height: 144px;
+  height: 112px;
   border-bottom: 1px solid theme.$border1-color;
-  background: rgba(10, 18, 34, 0.9);
+  background: rgba(7, 15, 30, 0.88);
+  -webkit-backdrop-filter: blur(var(--mv-blur-md));
+  backdrop-filter: blur(var(--mv-blur-md));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  z-index: 2;
 
   @media(min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
-    height: 96px;
+    height: 84px;
   }
 }
 
@@ -33,22 +38,22 @@
   left: 0;
   top: 0;
   margin-left: 14px;
-  height: 48px;
+  height: 52px;
   display: flex;
   justify-content: center;
   align-items: center;
 
   @media(min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
     margin-left: 24px;
-    height: 96px;
+    height: 84px;
   }
 }
 
 :local(.header-center) {
-  margin-top: 48px;
+  margin-top: 52px;
   border-top: 1px solid theme.$border1-color;
   width: 100%;
-  height: 96px;
+  height: 60px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -56,6 +61,7 @@
   @media(min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
     margin-top: 0;
     border-top: none;
+    height: 84px;
   }
 }
 
@@ -64,14 +70,14 @@
   right: 0;
   top: 0;
   margin-right: 14px;
-  height: 48px;
+  height: 52px;
   display: flex;
   justify-content: center;
   align-items: center;
 
   @media(min-width: theme.$breakpoint-lg) and (min-height: theme.$breakpoint-vr) {
     margin-right: 24px;
-    height: 96px;
+    height: 84px;
   }
 }
 
@@ -80,4 +86,14 @@
   flex: 1;
   flex-direction: column;
   overflow: auto;
+}
+
+@keyframes fullscreen-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }

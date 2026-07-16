@@ -1934,35 +1934,36 @@ class UIRoot extends Component {
                 scene={this.props.scene}
                 store={this.props.store}
                 objectFocused={!!this.props.selectedObject}
-                modalActive={renderEntryFlow}
+                modalActive={!!renderEntryFlow}
                 streaming={streaming}
                 viewport={
                   <>
                     {!this.state.dialog && renderEntryFlow ? entryDialog : undefined}
-                    {!this.props.selectedObject && <CompactMoreMenuButton />}
-                    {(!this.props.selectedObject ||
-                      (this.props.breakpoint !== "sm" && this.props.breakpoint !== "md")) && (
-                      <ContentMenu>
-                        {showObjectList && (
-                          <ObjectsMenuButton
-                            active={this.state.sidebarId === "objects"}
-                            onClick={() => this.toggleSidebar("objects")}
+                    {!renderEntryFlow && !this.props.selectedObject && <CompactMoreMenuButton />}
+                    {!renderEntryFlow &&
+                      (!this.props.selectedObject ||
+                        (this.props.breakpoint !== "sm" && this.props.breakpoint !== "md")) && (
+                        <ContentMenu>
+                          {showObjectList && (
+                            <ObjectsMenuButton
+                              active={this.state.sidebarId === "objects"}
+                              onClick={() => this.toggleSidebar("objects")}
+                            />
+                          )}
+                          <PeopleMenuButton
+                            active={this.state.sidebarId === "people"}
+                            disabled={isLockedDownDemo}
+                            onClick={!isLockedDownDemo ? () => this.toggleSidebar("people") : null}
+                            presencecount={this.state.presenceCount}
                           />
-                        )}
-                        <PeopleMenuButton
-                          active={this.state.sidebarId === "people"}
-                          disabled={isLockedDownDemo}
-                          onClick={!isLockedDownDemo ? () => this.toggleSidebar("people") : null}
-                          presencecount={this.state.presenceCount}
-                        />
-                        {showECSObjectsMenuButton && (
-                          <ECSDebugMenuButton
-                            active={this.state.sidebarId === "ecs-debug"}
-                            onClick={() => this.toggleSidebar("ecs-debug")}
-                          />
-                        )}
-                      </ContentMenu>
-                    )}
+                          {showECSObjectsMenuButton && (
+                            <ECSDebugMenuButton
+                              active={this.state.sidebarId === "ecs-debug"}
+                              onClick={() => this.toggleSidebar("ecs-debug")}
+                            />
+                          )}
+                        </ContentMenu>
+                      )}
                     {!entered && !streaming && !isMobile && streamerName && <SpectatingLabel name={streamerName} />}
                     {this.props.activeObject && (
                       <ObjectMenuContainer
@@ -2281,13 +2282,17 @@ class UIRoot extends Component {
                       />
                     )}
                     {entered && buildVersionInfo && (
-                      <ToolbarButton
-                        preset="transparent"
-                        disabled
-                        icon={null}
-                        label={<span style={{ fontFamily: "monospace", fontSize: 12 }}>{buildVersionInfo.short}</span>}
-                        title={buildVersionInfo.full ? `Build ${buildVersionInfo.full}` : "Build version unavailable"}
-                      />
+                      <div
+                        className={styles.buildVersion}
+                        role="status"
+                        aria-label={`Versión ${buildVersionInfo.short}`}
+                        title={buildVersionInfo.full ? `Versión ${buildVersionInfo.full}` : "Versión no disponible"}
+                      >
+                        <span>
+                          <FormattedMessage id="toolbar.build-version-label" defaultMessage="Build" />
+                        </span>
+                        <code>{buildVersionInfo.short}</code>
+                      </div>
                     )}
                     {entered && (
                       <ToolbarButton

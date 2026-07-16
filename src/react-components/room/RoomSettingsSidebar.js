@@ -85,7 +85,7 @@ export function RoomSettingsSidebar({
       title={<FormattedMessage id="room-settings-sidebar.title" defaultMessage="Room Settings" />}
       beforeTitle={showBackButton ? <BackButton onClick={onClose} /> : <CloseButton onClick={onClose} />}
     >
-      <Column padding as="form" onSubmit={handleSubmit(onSubmit)}>
+      <Column className={styles.form} padding as="form" onSubmit={handleSubmit(onSubmit)}>
         <SceneInfo
           accountId={accountId}
           scene={room.scene}

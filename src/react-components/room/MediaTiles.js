@@ -104,11 +104,18 @@ TileAction.propTypes = {
   children: PropTypes.node
 };
 
-export function CreateTile({ label, type, ...rest }) {
+export function CreateTile({ label, type, icon, tone, ...rest }) {
   return (
-    <BaseTile className={styles.createTile} wide={type === "scene"} tall={type === "avatar"} {...rest}>
+    <BaseTile
+      className={classNames(styles.createTile, {
+        [styles.createTileUpload]: tone === "upload",
+        [styles.createTileHelp]: tone === "help"
+      })}
+      wide={type === "scene"}
+      {...rest}
+    >
       <div className={styles.createTileContent}>
-        <AddIcon width={48} height={48} />
+        {icon || <AddIcon width={34} height={34} />}
         <p>{label}</p>
       </div>
     </BaseTile>
@@ -117,7 +124,9 @@ export function CreateTile({ label, type, ...rest }) {
 
 CreateTile.propTypes = {
   label: PropTypes.node,
-  type: PropTypes.string
+  type: PropTypes.string,
+  icon: PropTypes.node,
+  tone: PropTypes.oneOf(["upload", "help"])
 };
 
 export function MediaTile({ entry, processThumbnailUrl, onClick, onEdit, onShowSimilar, onCopy, onInfo, ...rest }) {

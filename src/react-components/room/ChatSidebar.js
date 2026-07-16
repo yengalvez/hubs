@@ -8,6 +8,7 @@ import { ReactComponent as AttachIcon } from "../icons/Attach.svg";
 import { ReactComponent as SendIcon } from "../icons/Send.svg";
 import { ReactComponent as ReactionIcon } from "../icons/Reaction.svg";
 import { ReactComponent as ShareIcon } from "../icons/Share.svg";
+import { ReactComponent as ChatIcon } from "../icons/Chat.svg";
 import { IconButton } from "../input/IconButton";
 import { TextAreaInput } from "../input/TextAreaInput";
 import { Popover } from "../popover/Popover";
@@ -506,11 +507,32 @@ PermissionMessageGroup.propTypes = {
   messages: PropTypes.array
 };
 
-export const ChatMessageList = forwardRef(({ children, ...rest }, ref) => (
-  <ul {...rest} className={styles.messageList} ref={ref}>
-    {children}
-  </ul>
-));
+export const ChatMessageList = forwardRef(({ children, ...rest }, ref) => {
+  const isEmpty = React.Children.count(children) === 0;
+
+  return (
+    <ul {...rest} className={styles.messageList} ref={ref}>
+      {isEmpty ? (
+        <li className={styles.emptyState}>
+          <span className={styles.emptyStateIcon}>
+            <ChatIcon />
+          </span>
+          <strong>
+            <FormattedMessage id="chat-sidebar.empty-state.title" defaultMessage="Start the conversation" />
+          </strong>
+          <p>
+            <FormattedMessage
+              id="chat-sidebar.empty-state.description"
+              defaultMessage="Messages shared in this room will appear here."
+            />
+          </p>
+        </li>
+      ) : (
+        children
+      )}
+    </ul>
+  );
+});
 
 ChatMessageList.propTypes = {
   children: PropTypes.node

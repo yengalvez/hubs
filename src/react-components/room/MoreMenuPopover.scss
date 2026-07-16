@@ -1,41 +1,40 @@
 @use "../styles/theme.scss";
 
 :local(.more-menu-popover) {
-  min-width: 240px;
-  padding-top: 16px;
+  min-width: 278px;
+  padding: 12px 8px 8px;
 
   @media (min-width: theme.$breakpoint-lg) {
-    padding-top: 0;
+    padding-top: 8px;
   }
 }
 
 :local(.more-menu-group-label) {
-  margin-left: 16px;
-  font-size: theme.$font-size-xs;
+  margin: 10px 12px 4px;
+  font-size: 9px;
   font-weight: theme.$font-weight-bold;
   color: theme.$text3-color;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.12em;
 }
 
 :local(.more-menu-item-list) {
-  padding-top: 4px;
-  padding-bottom: 16px;
+  padding: 2px 0 10px;
 }
 
 :local(.more-menu-item-target) {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 42px;
-  padding: 0 16px;
+  min-height: 44px;
+  padding: 0 12px;
   color: theme.$text1-color;
   font-size: theme.$font-size-sm;
   font-weight: theme.$font-weight-medium;
-  border-radius: 10px;
+  border-radius: 12px;
 
   & > * {
-    margin-right: 16px;
+    margin-right: 12px;
 
     &:last-child {
       margin-right: 0;
@@ -92,17 +91,18 @@ button:local(.more-menu-item-target) {
 :local(.compact-button) {
   pointer-events: auto;
   position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 48px;
-  height: 48px;
-  border-radius: 48px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   color: theme.$button-text-color;
-  background-color: rgba(12, 20, 38, 0.72);
+  background-color: rgba(8, 17, 33, 0.9);
   border: 1px solid theme.$button-border-color;
   box-shadow: var(--mv-shadow-1);
   -webkit-backdrop-filter: blur(var(--mv-blur-sm));
   backdrop-filter: blur(var(--mv-blur-sm));
+  z-index: var(--mv-z-hud);
   display: flex;
   justify-content: center;
   align-items: center;

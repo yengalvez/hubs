@@ -1,20 +1,20 @@
 @use "../styles/theme";
 
 :local(.button) {
-  height: 48px;
-  min-height: 48px;
+  height: 46px;
+  min-height: 46px;
   width: min-content;
-  min-width: 156px;
+  min-width: 144px;
   font-weight: 700;
   font-size: 12px;
-  border-radius: var(--mv-radius-md);
+  border-radius: 14px;
   border: 1px solid theme.$button-border-color;
   color: theme.$button-text-color;
   background-color: theme.$button-bg-color;
   box-shadow: var(--mv-shadow-1);
   -webkit-backdrop-filter: blur(var(--mv-blur-sm));
   backdrop-filter: blur(var(--mv-blur-sm));
-  transition: transform 0.14s ease, background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+  transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
   white-space: nowrap;
   padding: 0 24px;
   display: flex;
@@ -27,12 +27,51 @@
   }
 
   &:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: 0 15px 34px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   &:active {
     transform: translateY(0);
   }
+}
+
+:local(.sm) {
+  min-width: 0;
+  width: auto;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--mv-radius-pill);
+  font-size: 11px;
+}
+
+:local(.lg) {
+  min-width: 176px;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 28px;
+  font-size: 13px;
+}
+
+:local(.xl) {
+  min-width: 208px;
+  height: 58px;
+  min-height: 58px;
+  padding: 0 32px;
+  font-size: 14px;
+}
+
+:local(.thin) {
+  min-width: 0;
+  width: auto;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+:local(.thick) {
+  padding-left: 32px;
+  padding-right: 32px;
 }
 
 :local(.basic),

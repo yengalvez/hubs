@@ -10,15 +10,15 @@
   padding: 0;
   border: 1px solid theme.$border1-color;
   border-radius: 999px;
-  background: theme.$button-bg-color;
-  box-shadow: var(--mv-shadow-1);
+  background: rgba(16, 31, 57, 0.86);
+  box-shadow: 0 9px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   -webkit-backdrop-filter: blur(var(--mv-blur-sm));
   backdrop-filter: blur(var(--mv-blur-sm));
   font-size: theme.$font-size-xs;
   font-weight: theme.$font-weight-bold;
   color: theme.$text1-color;
   cursor: pointer;
-  transition: transform 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
+  transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 
   svg {
     display: block;
@@ -29,7 +29,7 @@
   }
 
   &:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
     color: theme.$primary-color-hover;
     border-color: var(--mv-border-strong);
     background: theme.$button-bg-color-hover;
@@ -105,7 +105,7 @@
   min-height: 36px;
   min-width: 36px;
   padding: 7px 12px;
-  border-radius: var(--mv-radius-pill);
+  border-radius: 12px;
 }
 
 :local(.iconOnly) {

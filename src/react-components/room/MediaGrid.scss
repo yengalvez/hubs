@@ -2,28 +2,29 @@
 
 :local(.media-grid) {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   place-items: start;
   width: 100%;
-  padding: 8px;
+  gap: 18px;
+  padding: 2px;
   align-content: flex-start;
   flex: 1;
 
   @media(min-width: theme.$breakpoint-lg) {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
 
   & > * {
     width: 100%;
-    padding: 8px;
+    padding: 0;
   }
 }
 
 :local(.sm) {
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
 
   @media(min-width: theme.$breakpoint-lg) {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   }
 }
 

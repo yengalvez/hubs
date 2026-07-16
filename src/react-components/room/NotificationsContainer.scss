@@ -10,13 +10,19 @@
   left: 50%;
   transform: translateX(-50%);
   flex-direction: column;
-  bottom: 8px;
-  margin-bottom: 8px;
+  bottom: calc(var(--mv-toolbar-height) + 12px);
+  margin-bottom: 0;
+  z-index: var(--mv-z-notice);
+  pointer-events: none;
+
+  & > * {
+    pointer-events: auto;
+  }
 }
 
 :local(.mobile) {
   bottom: auto;
-  top: 72px;
+  top: calc(env(safe-area-inset-top, 0px) + 70px);
   pointer-events: none !important;
 
   @media (min-width: theme.$breakpoint-lg) {

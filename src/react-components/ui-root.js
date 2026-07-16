@@ -2164,6 +2164,16 @@ class UIRoot extends Component {
                 }
                 toolbarCenter={
                   <>
+                    {entered && buildVersionInfo && (
+                      <div
+                        className={classNames(styles.mobileBuildVersion, styleUtils.hideLg)}
+                        role="status"
+                        aria-label={`Versión ${buildVersionInfo.short}`}
+                        title={buildVersionInfo.full ? `Versión ${buildVersionInfo.full}` : "Versión no disponible"}
+                      >
+                        <code>{buildVersionInfo.short}</code>
+                      </div>
+                    )}
                     {watching && (
                       <>
                         <ToolbarButton

@@ -12,6 +12,7 @@ const validator = new Validator();
 import { EventTarget } from "event-target-shim";
 import { fetchRandomDefaultAvatarId, generateRandomName } from "../utils/identity.js";
 import { NO_DEVICE_ID } from "../utils/media-devices-utils.js";
+import { parseJSONObject } from "../utils/json-utils";
 import { AAModes } from "../constants";
 
 const defaultMaterialQuality = (function () {
@@ -279,11 +280,16 @@ export default class Store extends EventTarget {
 
     this._shouldResetAvatarOnInit = false;
 
-    const oauthFlowCredentials = Cookies.getJSON(OAUTH_FLOW_CREDENTIALS_KEY);
+    const serializedOAuthFlowCredentials = Cookies.get(OAUTH_FLOW_CREDENTIALS_KEY);
+    const oauthFlowCredentials = parseJSONObject(serializedOAuthFlowCredentials);
+
+    if (serializedOAuthFlowCredentials) {
+      Cookies.remove(OAUTH_FLOW_CREDENTIALS_KEY);
+    }
+
     if (oauthFlowCredentials) {
       this.update({ credentials: oauthFlowCredentials });
       this._shouldResetAvatarOnInit = true;
-      Cookies.remove(OAUTH_FLOW_CREDENTIALS_KEY);
     }
 
     this._signOutOnExpiredAuthToken();

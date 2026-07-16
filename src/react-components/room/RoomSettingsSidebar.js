@@ -69,7 +69,7 @@ export function RoomSettingsSidebar({
     }
 
     const nextMobility = watch("user_data.bots.mobility");
-    if (!["low", "medium", "high"].includes(nextMobility)) {
+    if (!["static", "low", "medium", "high"].includes(nextMobility)) {
       setValue("user_data.bots.mobility", "medium", { shouldDirty: false });
     }
 
@@ -310,6 +310,19 @@ export function RoomSettingsSidebar({
               label={<FormattedMessage id="room-settings-sidebar.bots-mobility" defaultMessage="Mobility" />}
               fullWidth
             >
+              <RadioInputOption
+                value="static"
+                disabled={!botsEnabled}
+                label={<FormattedMessage id="room-settings-sidebar.bots-mobility-static" defaultMessage="Static" />}
+                description={
+                  <FormattedMessage
+                    id="room-settings-sidebar.bots-mobility-static-description"
+                    defaultMessage="Remain in place until the room setting changes."
+                  />
+                }
+                error={errors?.user_data?.bots?.mobility?.message}
+                {...register("user_data.bots.mobility")}
+              />
               <RadioInputOption
                 value="low"
                 disabled={!botsEnabled}

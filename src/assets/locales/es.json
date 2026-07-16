@@ -648,6 +648,8 @@
   "room-settings-sidebar.bots-mobility-low-description": "Períodos largos en reposo con movimientos cortos.",
   "room-settings-sidebar.bots-mobility-medium": "Media",
   "room-settings-sidebar.bots-mobility-medium-description": "Ciclos equilibrados entre reposo y movimiento.",
+  "room-settings-sidebar.bots-mobility-static": "Inmóviles",
+  "room-settings-sidebar.bots-mobility-static-description": "Permanecen en su sitio hasta que cambies la configuración de la sala.",
   "room-settings-sidebar.bots-prompt": "Instrucciones del bot",
   "room-settings-sidebar.bots-prompt-placeholder": "Describe el rol, el tono y el conocimiento específico de la sala. No incluyas secretos ni datos personales.",
   "room-settings-sidebar.description": "Descripción de la sala",

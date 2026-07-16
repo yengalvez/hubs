@@ -31,7 +31,7 @@ function normalizeBotsConfig(config) {
     chatEnabled: !!(config && config.chat_enabled)
   };
 
-  if (!["low", "medium", "high"].includes(normalized.mobility)) {
+  if (!["static", "low", "medium", "high"].includes(normalized.mobility)) {
     normalized.mobility = "medium";
   }
 
@@ -39,6 +39,11 @@ function normalizeBotsConfig(config) {
 }
 
 const MOBILITY_BEHAVIOR = {
+  static: {
+    speedMps: 0,
+    idleMinMs: Number.POSITIVE_INFINITY,
+    idleMaxMs: Number.POSITIVE_INFINITY
+  },
   low: {
     speedMps: 0.45,
     idleMinMs: 8000,
@@ -555,6 +560,10 @@ AFRAME.registerSystem("bot-runner-system", {
   },
 
   initialIdleDurationMs(mobility) {
+    if (mobility === "static") {
+      return Number.POSITIVE_INFINITY;
+    }
+
     if (mobility === "low") {
       return 2000 + Math.floor(Math.random() * 3000);
     }
@@ -595,7 +604,15 @@ AFRAME.registerSystem("bot-runner-system", {
 
     this.bots.forEach(record => {
       if (record.mobility !== config.mobility) {
+        const previousMobility = record.mobility;
         record.mobility = config.mobility;
+        const now = this.getServerNowMs();
+
+        if (record.mobility === "static") {
+          this.setIdle(record, now);
+        } else if (previousMobility === "static") {
+          record.stateEndsAt = now + this.initialIdleDurationMs(record.mobility);
+        }
       }
     });
   },
@@ -622,6 +639,11 @@ AFRAME.registerSystem("bot-runner-system", {
 
   startWalking(record, waypointName, nowMs = this.getServerNowMs()) {
     this.updateRecordPositionFromPath(record, nowMs);
+
+    if (record.mobility === "static") {
+      this.setIdle(record, nowMs);
+      return;
+    }
 
     let target = null;
 
@@ -710,7 +732,8 @@ AFRAME.registerSystem("bot-runner-system", {
     record.destination = null;
     this.releaseReservation(record);
     record.path = null;
-    record.stateEndsAt = nowMs + this.randomIdleDurationMs(record.mobility);
+    record.stateEndsAt =
+      record.mobility === "static" ? Number.POSITIVE_INFINITY : nowMs + this.randomIdleDurationMs(record.mobility);
 
     // Freeze the bot at its current location for late joiners.
     record.el.setAttribute("bot-path", {
@@ -733,6 +756,7 @@ AFRAME.registerSystem("bot-runner-system", {
 
     const record = this.bots.get(botId);
     if (!record) return;
+    if (record.mobility === "static") return;
 
     if (command.type === "go_to_waypoint" && command.waypoint) {
       this.startWalking(record, String(command.waypoint), this.getServerNowMs());
@@ -807,7 +831,7 @@ AFRAME.registerSystem("bot-runner-system", {
       this.updateRecordPositionFromPath(record, now);
 
       if (record.state === "idle") {
-        if (now >= record.stateEndsAt) {
+        if (record.mobility !== "static" && now >= record.stateEndsAt) {
           this.startWalking(record, null, now);
         }
       } else if (record.state === "walk") {

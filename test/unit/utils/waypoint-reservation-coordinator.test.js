@@ -527,3 +527,35 @@ test("an unsupported reconfiguration invalidates an in-flight success", async t 
   t.is(coordinator.currentWaypointId, null);
   t.false(coordinator.isReserved("stable-seat-a"));
 });
+
+test("diagnostic state is an immutable local-only copy", t => {
+  const { coordinator } = createHarness(() => ({ status: "deferred" }));
+  coordinator.configure(
+    capability({
+      active: [
+        { waypoint_id: "seat-b", expires_at: new Date(NOW + 15000).toISOString() },
+        { waypoint_id: "seat-a", expires_at: new Date(NOW + 15000).toISOString() }
+      ],
+      current: {
+        waypoint_id: "seat-a",
+        operation_id: "operation-a",
+        reservation_id: "reservation-a",
+        expires_at: new Date(NOW + 15000).toISOString()
+      }
+    })
+  );
+
+  const state = coordinator.getDiagnosticState();
+  t.deepEqual(state, {
+    protocol: WAYPOINT_RESERVATION_PROTOCOL,
+    supported: true,
+    activeWaypointIds: ["seat-a", "seat-b"],
+    current: { waypointId: "seat-a", reservationId: "reservation-a" }
+  });
+  t.true(Object.isFrozen(state));
+  t.true(Object.isFrozen(state.activeWaypointIds));
+  t.true(Object.isFrozen(state.current));
+  t.not(state.activeWaypointIds, coordinator.activeWaypointIds());
+  t.false("operationId" in state.current);
+  t.false("claimId" in state.current);
+});

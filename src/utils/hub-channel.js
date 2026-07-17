@@ -185,6 +185,13 @@ export default class HubChannel extends EventTarget {
     return this.waypointReservations.currentWaypointId;
   }
 
+  // Read-only, local-only bridge for browser acceptance diagnostics. It does
+  // not expose presence ownership, channel credentials or another session's
+  // private reservation identifier.
+  getWaypointReservationDiagnosticStateForTests() {
+    return this.waypointReservations.getDiagnosticState();
+  }
+
   setPermissionsFromToken = token => {
     // Note: token is not verified.
     this.token = token;

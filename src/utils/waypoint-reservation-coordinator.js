@@ -159,6 +159,24 @@ export class WaypointReservationCoordinator {
     return this.current && this.current.waypointId;
   }
 
+  getDiagnosticState() {
+    this.pruneExpired();
+    const activeWaypointIds = Object.freeze(this.activeWaypointIds().sort());
+    const current = this.current
+      ? Object.freeze({
+          waypointId: this.current.waypointId,
+          reservationId: this.current.reservationId
+        })
+      : null;
+
+    return Object.freeze({
+      protocol: WAYPOINT_RESERVATION_PROTOCOL,
+      supported: this.supported,
+      activeWaypointIds,
+      current
+    });
+  }
+
   reserve(waypointId) {
     return this.reserveWithHandle(waypointId).then(Boolean);
   }

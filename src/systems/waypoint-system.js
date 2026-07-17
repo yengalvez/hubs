@@ -2,6 +2,7 @@ import { setMatrixWorld, affixToWorldUp } from "../utils/three-utils";
 import { isTagged } from "../components/tags";
 import { applyPersistentSync } from "../utils/permissions-utils";
 import { waitForDOMContentLoaded } from "../utils/async-utils";
+import { WaypointOccupancyAttempts } from "../utils/waypoint-occupancy-attempts";
 const calculateIconTransform = (function () {
   const up = new THREE.Vector3();
   const backward = new THREE.Vector3();
@@ -105,8 +106,7 @@ export class WaypointSystem {
     this.ready = [];
     this.previousWaypointHash = null;
     this.initialSpawnHappened = false;
-    this.occupancyAttempt = 0;
-    this.pendingWaypoint = null;
+    this.occupancyAttempts = new WaypointOccupancyAttempts();
 
     this.waypointForTemplateEl = {};
     this.elementsFromTemplatesFor = {};
@@ -121,8 +121,7 @@ export class WaypointSystem {
   }
 
   releaseAnyOccupiedWaypoints() {
-    this.occupancyAttempt++;
-    this.pendingWaypoint = null;
+    this.occupancyAttempts.cancel();
     if (this.currentWaypoint) {
       unoccupyWaypoint(this.currentWaypoint);
       this.currentWaypoint = null;
@@ -216,7 +215,7 @@ export class WaypointSystem {
     }
     const ri = this.ready.indexOf(component);
     if (ri !== -1) {
-      if (component === this.currentWaypoint || component === this.pendingWaypoint) {
+      if (component === this.currentWaypoint || this.occupancyAttempts.isPending(component)) {
         this.releaseAnyOccupiedWaypoints();
       }
       this.ready.splice(ri, 1);
@@ -251,17 +250,16 @@ export class WaypointSystem {
       return false;
     }
 
-    const attempt = ++this.occupancyAttempt;
-    this.pendingWaypoint = waypointComponent;
+    const attempt = this.occupancyAttempts.begin(waypointComponent);
     const reservation = await hubChannel.reserveWaypoint(waypointId);
-    if (!reservation || attempt !== this.occupancyAttempt || this.pendingWaypoint !== waypointComponent) {
+    if (!reservation || !this.occupancyAttempts.isCurrent(attempt)) {
       if (reservation) hubChannel.releaseWaypointReservation(reservation);
-      if (this.pendingWaypoint === waypointComponent) this.pendingWaypoint = null;
+      this.occupancyAttempts.clear(attempt);
       return false;
     }
 
     if (!this.ready.includes(waypointComponent) || waypointReservationId(waypointComponent) !== waypointId) {
-      this.pendingWaypoint = null;
+      this.occupancyAttempts.clear(attempt);
       hubChannel.releaseWaypointReservation(reservation);
       return false;
     }
@@ -270,7 +268,7 @@ export class WaypointSystem {
     isMineOrTakeOwnership(waypointComponent.el);
     occupyWaypoint(waypointComponent);
     this.currentWaypoint = waypointComponent;
-    this.pendingWaypoint = null;
+    this.occupancyAttempts.clear(attempt);
     return true;
   }
   tryToOccupyAnyOf(waypoints) {

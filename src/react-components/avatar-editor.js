@@ -607,7 +607,7 @@ class AvatarEditor extends Component {
               <p className="mode-info">
                 <FormattedMessage
                   id="avatar-editor.private-glb-info"
-                  defaultMessage="Este avatar se sube como privado para tu cuenta y no se publica en listados destacados."
+                  defaultMessage="This avatar is uploaded privately to your account and is not published in featured listings."
                 />
               </p>
             )}
@@ -619,7 +619,7 @@ class AvatarEditor extends Component {
                       "glb",
                       intl.formatMessage({
                         id: "avatar-editor.field.private-glb",
-                        defaultMessage: "Archivo GLB personalizado"
+                        defaultMessage: "Custom GLB file"
                       }),
                       "model/gltf+binary,.glb"
                     )}

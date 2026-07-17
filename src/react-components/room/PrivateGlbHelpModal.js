@@ -9,46 +9,46 @@ import styles from "./PrivateGlbHelpModal.scss";
 export function PrivateGlbHelpModal({ onClose }) {
   return (
     <Modal
-      title={<FormattedMessage id="private-glb-help-modal.title" defaultMessage="Cómo subir un avatar GLB privado" />}
+      title={<FormattedMessage id="private-glb-help-modal.title" defaultMessage="How to upload a private GLB avatar" />}
       beforeTitle={<CloseButton onClick={onClose} />}
     >
       <Column padding className={styles.content}>
         <p className={styles.intro}>
           <FormattedMessage
             id="private-glb-help-modal.intro"
-            defaultMessage="Este flujo sube tu avatar como privado en tu cuenta, para elegirlo desde Mis avatares."
+            defaultMessage="This flow uploads an avatar privately to your account so you can select it from My Avatars."
           />
         </p>
         <ol className={styles.steps}>
           <li className={styles.step}>
             <FormattedMessage
               id="private-glb-help-modal.step-1"
-              defaultMessage="Crea o exporta un avatar compatible desde la herramienta que elijas en formato .glb."
+              defaultMessage="Create or export a compatible avatar from the tool of your choice in .glb format."
             />
           </li>
           <li className={styles.step}>
             <FormattedMessage
               id="private-glb-help-modal.step-2"
-              defaultMessage="En Hubs, abre Cambiar avatar y pulsa Subir GLB (privado)."
+              defaultMessage="In Hubs, open Change Avatar and choose Upload GLB (private)."
             />
           </li>
           <li className={styles.step}>
             <FormattedMessage
               id="private-glb-help-modal.step-3"
-              defaultMessage="Pon un nombre, selecciona tu archivo .glb y guarda."
+              defaultMessage="Enter a name, select the .glb file and save it."
             />
           </li>
           <li className={styles.step}>
             <FormattedMessage
               id="private-glb-help-modal.step-4"
-              defaultMessage="Selecciona el avatar en Mis avatares para usarlo en la sala."
+              defaultMessage="Select the avatar from My Avatars to use it in the room."
             />
           </li>
         </ol>
         <p className={styles.note}>
           <FormattedMessage
             id="private-glb-help-modal.note"
-            defaultMessage="Este flujo no publica el avatar en listados destacados. Revisa por separado la licencia y privacidad de la herramienta con la que lo creaste."
+            defaultMessage="This flow does not publish the avatar in featured listings. Review the license and privacy terms of the tool used to create it separately."
           />
         </p>
       </Column>

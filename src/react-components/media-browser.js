@@ -538,7 +538,7 @@ class MediaBrowserContainer extends Component {
                   icon={<UploadIcon />}
                   tone="upload"
                   label={
-                    <FormattedMessage id="media-browser.create-private-glb" defaultMessage="Subir GLB (privado)" />
+                    <FormattedMessage id="media-browser.create-private-glb" defaultMessage="Upload GLB (private)" />
                   }
                 />
                 <CreateTile
@@ -546,7 +546,7 @@ class MediaBrowserContainer extends Component {
                   onClick={this.onShowPrivateGlbHelp}
                   icon={<HelpIcon />}
                   tone="help"
-                  label={<FormattedMessage id="media-browser.private-glb-help" defaultMessage="Guía GLB" />}
+                  label={<FormattedMessage id="media-browser.private-glb-help" defaultMessage="GLB guide" />}
                 />
               </>
             )}

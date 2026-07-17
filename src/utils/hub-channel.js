@@ -4,6 +4,7 @@ import { Presence } from "phoenix";
 import { migrateChannelToSocket, discordBridgesForPresences, migrateToChannel } from "./phoenix-utils";
 import configs from "./configs";
 import { WaypointReservationCoordinator } from "./waypoint-reservation-coordinator";
+import { BotChatCapabilityState } from "./bot-chat-lifecycle";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30;
@@ -46,6 +47,9 @@ export default class HubChannel extends EventTarget {
     this._signedIn = !!this.store.state.credentials.token;
     this._permissions = {};
     this._blockedSessionIds = new Set();
+    this._botChatCapabilityState = new BotChatCapabilityState(detail => {
+      this.dispatchEvent(new CustomEvent("bot_chat_capability_changed", { detail }));
+    });
     this.waypointReservations = new WaypointReservationCoordinator({
       onStateChange: detail => this.dispatchEvent(new CustomEvent("waypoint_reservations_changed", { detail })),
       onReservationLost: detail => this.dispatchEvent(new CustomEvent("waypoint_reservation_lost", { detail }))
@@ -148,6 +152,7 @@ export default class HubChannel extends EventTarget {
     this.hubId = data.hubs[0].hub_id;
 
     this.setPermissionsFromToken(data.perms_token);
+    this.configureBotChatCapability(data.bot_chat_capability);
     this.configureWaypointReservations(data.waypoint_reservation);
 
     if (presenceBindings) {
@@ -165,6 +170,18 @@ export default class HubChannel extends EventTarget {
 
   configureWaypointReservations(capability) {
     this.waypointReservations.configure(capability);
+  }
+
+  configureBotChatCapability(capability) {
+    this._botChatCapabilityState.configure(capability);
+  }
+
+  get botChatCapability() {
+    return this._botChatCapabilityState.capability;
+  }
+
+  get botChatCapabilityEpoch() {
+    return this._botChatCapabilityState.epoch;
   }
 
   /** @returns {Promise<{waypointId: string, reservationId: string, claimId: string} | null>} */
@@ -382,8 +399,9 @@ export default class HubChannel extends EventTarget {
 
       this.channel
         .push("sign_in", { token, creator_assignment_token })
-        .receive("ok", ({ perms_token }) => {
+        .receive("ok", ({ perms_token, bot_chat_capability }) => {
           this.setPermissionsFromToken(perms_token);
+          this.configureBotChatCapability(bot_chat_capability);
           this._signedIn = true;
           resolve();
         })
@@ -404,8 +422,9 @@ export default class HubChannel extends EventTarget {
     return new Promise((resolve, reject) => {
       this.channel
         .push("sign_out")
-        .receive("ok", async () => {
+        .receive("ok", async ({ bot_chat_capability } = {}) => {
           this._signedIn = false;
+          this.configureBotChatCapability(bot_chat_capability);
           const params = this.channel.params();
           delete params.auth_token;
           delete params.perms_token;

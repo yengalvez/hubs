@@ -1364,6 +1364,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const permsToken = oauthFlowPermsToken || data.perms_token;
       hubChannel.setPermissionsFromToken(permsToken);
+      hubChannel.configureBotChatCapability(data.bot_chat_capability);
       hubChannel.configureWaypointReservations(data.waypoint_reservation);
 
       subscriptions.setHubChannel(hubChannel);

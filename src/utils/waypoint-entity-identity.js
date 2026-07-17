@@ -16,20 +16,35 @@ export function isCurrentWaypointEntityIdentity(world, identity, waypointId) {
 
 export class PendingWaypointEntityMoves {
   constructor() {
-    this.pendingObjects = new Set();
+    this.pendingObjects = new Map();
   }
 
-  begin(identity) {
-    if (!identity || this.pendingObjects.has(identity.object3D)) return false;
-    this.pendingObjects.add(identity.object3D);
+  begin(identity, intent) {
+    if (!identity) return false;
+    const pending = this.pendingObjects.get(identity.object3D);
+    if (pending && (!intent || pending.intent === intent)) return false;
+    this.pendingObjects.set(identity.object3D, { identity, intent });
     return true;
   }
 
-  end(identity) {
-    if (identity) this.pendingObjects.delete(identity.object3D);
+  end(identity, intent) {
+    const pending = identity && this.pendingObjects.get(identity.object3D);
+    if (pending && pending.identity === identity && pending.intent === intent) {
+      this.pendingObjects.delete(identity.object3D);
+    }
   }
 
   has(identity) {
-    return !!identity && this.pendingObjects.has(identity.object3D);
+    const pending = identity && this.pendingObjects.get(identity.object3D);
+    return !!pending && pending.identity === identity;
+  }
+
+  intentFor(identity) {
+    const pending = identity && this.pendingObjects.get(identity.object3D);
+    return pending ? pending.intent : null;
+  }
+
+  cancel() {
+    this.pendingObjects.clear();
   }
 }

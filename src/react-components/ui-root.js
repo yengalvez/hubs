@@ -111,6 +111,8 @@ import { defineQuery } from "bitecs";
 import { SceneRoot, Waypoint } from "../bit-components";
 import {
   WaypointFlags,
+  beginWaypointMoveIntent,
+  isCurrentWaypointMoveIntent,
   releaseOccupiedWaypoint,
   tryOccupyWaypoint,
   moveToUnoccupiableSpawnPoint as moveToUnoccupiableSpawnPointBitEcs
@@ -858,9 +860,18 @@ class UIRoot extends Component {
       }
 
       candidates.sort((a, b) => a.distSq - b.distSq);
+      if (!candidates.length) {
+        this.notifyNoSeatNearby();
+        return;
+      }
+
+      const moveIntent = beginWaypointMoveIntent();
       for (let i = 0; i < candidates.length; i++) {
         const candidate = candidates[i];
-        if (!(await tryOccupyWaypoint(world, candidate.eid))) continue;
+        if (!(await tryOccupyWaypoint(world, candidate.eid, moveIntent))) {
+          if (!isCurrentWaypointMoveIntent(moveIntent)) return;
+          continue;
+        }
 
         const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
         characterController.shouldLandWhenPossible = true;
@@ -900,10 +911,14 @@ class UIRoot extends Component {
       return;
     }
 
+    const moveIntent = waypointSystem.beginMoveIntent();
     for (let i = 0; i < candidates.length; i++) {
       const { component } = candidates[i];
-      const didOccupy = await waypointSystem.tryToOccupy(component);
-      if (!didOccupy) continue;
+      const didOccupy = await waypointSystem.tryToOccupy(component, moveIntent);
+      if (!didOccupy) {
+        if (!waypointSystem.isMoveIntentCurrent(moveIntent)) return;
+        continue;
+      }
 
       component.el.object3D.updateMatrices();
       characterController.shouldLandWhenPossible = true;

@@ -290,6 +290,16 @@ import { exposeBitECSDebugHelpers } from "./bitecs-debug-helpers";
 import { loadLegacyRoomObjects } from "./utils/load-legacy-room-objects";
 import { loadSavedEntityStates } from "./utils/entity-state-utils";
 import { shouldUseNewLoader } from "./utils/bit-utils";
+import { getSittingWaypointDiagnosticsForTests } from "./utils/sitting-waypoint-diagnostics";
+
+window.APP.getSittingWaypointDiagnosticsForTests = () =>
+  getSittingWaypointDiagnosticsForTests({
+    useBitECS: shouldUseNewLoader(),
+    world: window.APP.world,
+    waypointSystem: AFRAME.scenes[0]?.systems?.["hubs-systems"]?.waypointSystem,
+    getString: sid => window.APP.getString(sid),
+    getNetworkOwner: element => NAF.utils.getNetworkOwner(element)
+  });
 
 const PHOENIX_RELIABLE_NAF = "phx-reliable";
 NAF.options.firstSyncSource = PHOENIX_RELIABLE_NAF;

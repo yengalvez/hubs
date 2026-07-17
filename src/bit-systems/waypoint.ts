@@ -21,6 +21,7 @@ import {
   isCurrentWaypointEntityIdentity,
   PendingWaypointEntityMoves
 } from "../utils/waypoint-entity-identity";
+import { WaypointMoveIntentTracker, WaypointSpawnJobRunner } from "../utils/waypoint-occupancy-attempts";
 
 export enum WaypointFlags {
   canBeSpawnPoint = 1 << 0,
@@ -36,7 +37,10 @@ const waypointQuery = defineQuery([Waypoint]);
 
 let myOccupiedWaypoint = 0;
 let myOccupiedWaypointObject: Object3D | null = null;
+let myOccupiedWaypointReservation: any = null;
 const pendingWaypointMoves = new PendingWaypointEntityMoves();
+const waypointMoveIntents = new WaypointMoveIntentTracker();
+const spawnJobs = new WaypointSpawnJobRunner();
 
 export function waypointReservationId(world: HubsWorld, eid: EntityID) {
   if (!entityExists(world, eid) || !hasComponent(world, Waypoint, eid)) return null;
@@ -51,15 +55,32 @@ function clearLocalOccupiedWaypoint(world: HubsWorld | null = window.APP?.world 
     }
     myOccupiedWaypoint = 0;
     myOccupiedWaypointObject = null;
+    myOccupiedWaypointReservation = null;
   }
 }
 
 export function releaseOccupiedWaypoint() {
+  waypointMoveIntents.cancel();
+  pendingWaypointMoves.cancel();
   clearLocalOccupiedWaypoint();
   return window.APP.hubChannel ? window.APP.hubChannel.releaseWaypointReservation() : Promise.resolve(false);
 }
 
-export async function tryOccupyWaypoint(world: HubsWorld, eid: EntityID) {
+function discardWaypointReservation(world: HubsWorld, reservation: any) {
+  if (reservation && myOccupiedWaypointReservation === reservation) clearLocalOccupiedWaypoint(world);
+  window.APP.hubChannel?.releaseWaypointReservation(reservation);
+}
+
+export function beginWaypointMoveIntent() {
+  return waypointMoveIntents.begin();
+}
+
+export function isCurrentWaypointMoveIntent(intent: any) {
+  return waypointMoveIntents.isCurrent(intent);
+}
+
+export async function tryOccupyWaypoint(world: HubsWorld, eid: EntityID, moveIntent: any = null) {
+  const intent = moveIntent || waypointMoveIntents.begin();
   if (
     !entityExists(world, eid) ||
     !hasComponent(world, NetworkedWaypoint, eid) ||
@@ -73,6 +94,7 @@ export async function tryOccupyWaypoint(world: HubsWorld, eid: EntityID) {
   if (!waypointId || !hubChannel) return false;
   const waypointIdentity = captureWaypointEntityIdentity(world, eid, waypointId);
   if (!waypointIdentity) return false;
+  if (!waypointMoveIntents.isCurrent(intent)) return false;
   if (hubChannel.isWaypointReserved(waypointId) && hubChannel.currentWaypointReservationId !== waypointId) {
     return false;
   }
@@ -80,24 +102,26 @@ export async function tryOccupyWaypoint(world: HubsWorld, eid: EntityID) {
   const reservation = await hubChannel.reserveWaypoint(waypointId);
   if (!reservation) return false;
   if (
+    !waypointMoveIntents.isCurrent(intent) ||
     !entityExists(world, eid) ||
     !hasComponent(world, NetworkedWaypoint, eid) ||
     !isCurrentWaypointEntityIdentity(world, waypointIdentity, waypointReservationId(world, eid))
   ) {
-    hubChannel.releaseWaypointReservation(reservation);
+    discardWaypointReservation(world, reservation);
     return false;
   }
 
   clearLocalOccupiedWaypoint(world);
   takeOwnership(world, eid);
-  occupyWaypoint(world, eid);
-  return true;
+  occupyWaypoint(world, eid, reservation);
+  return reservation;
 }
 
-function occupyWaypoint(world: HubsWorld, eid: EntityID) {
+function occupyWaypoint(world: HubsWorld, eid: EntityID, reservation: any) {
   NetworkedWaypoint.occupied[eid] = 1;
   myOccupiedWaypoint = eid;
   myOccupiedWaypointObject = world.eid2obj.get(eid) || null;
+  myOccupiedWaypointReservation = reservation;
 }
 
 function nonOccupiableSpawnPoints(world: HubsWorld) {
@@ -126,27 +150,32 @@ function occupiableSpawnPoints(world: HubsWorld) {
 function* tryOccupyAndSpawn(
   world: HubsWorld,
   characterController: CharacterControllerSystem,
-  spawnPoint: EntityID
-): Generator<Promise<boolean>, boolean, boolean> {
+  spawnPoint: EntityID,
+  moveIntent: any
+): Generator<Promise<any>, boolean, any> {
   const identity = captureWaypointEntityIdentity(world, spawnPoint, waypointReservationId(world, spawnPoint));
   if (!identity) return false;
-  const didOccupy = yield tryOccupyWaypoint(world, spawnPoint);
-  if (!didOccupy) return false;
-  if (!isCurrentWaypointEntityIdentity(world, identity, waypointReservationId(world, spawnPoint))) {
-    if (myOccupiedWaypointObject === identity.object3D) releaseOccupiedWaypoint();
+  const reservation = yield tryOccupyWaypoint(world, spawnPoint, moveIntent);
+  if (!reservation) return false;
+  if (
+    !waypointMoveIntents.isCurrent(moveIntent) ||
+    !isCurrentWaypointEntityIdentity(world, identity, waypointReservationId(world, spawnPoint))
+  ) {
+    discardWaypointReservation(world, reservation);
     return false;
   }
   moveToWaypoint(world, spawnPoint, characterController, true, true);
   return true;
 }
 
-function* trySpawnIntoOccupiable(world: HubsWorld, characterController: CharacterControllerSystem) {
+function* trySpawnIntoOccupiable(world: HubsWorld, characterController: CharacterControllerSystem, moveIntent: any) {
   for (let i = 0; i < 3; i++) {
+    if (!waypointMoveIntents.isCurrent(moveIntent)) return false;
     const spawnPoints = occupiableSpawnPoints(world);
     if (!spawnPoints.length) return false;
 
     const waypoint = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
-    if (yield* tryOccupyAndSpawn(world, characterController, waypoint)) {
+    if (yield* tryOccupyAndSpawn(world, characterController, waypoint, moveIntent)) {
       initialSpawnHappened = true;
       return true;
     }
@@ -155,16 +184,22 @@ function* trySpawnIntoOccupiable(world: HubsWorld, characterController: Characte
   return false;
 }
 
-function* moveToSpawnPointJob(world: HubsWorld, characterController: CharacterControllerSystem) {
-  if (yield* trySpawnIntoOccupiable(world, characterController)) return;
+function* moveToSpawnPointJob(world: HubsWorld, characterController: CharacterControllerSystem, moveIntent: any) {
+  if (yield* trySpawnIntoOccupiable(world, characterController, moveIntent)) return;
+
+  if (!waypointMoveIntents.isCurrent(moveIntent)) {
+    initialSpawnHappened = true;
+    return;
+  }
 
   moveToUnoccupiableSpawnPoint(world, characterController);
   initialSpawnHappened = true;
 }
 
-let spawnJob: Coroutine | null = null;
 export function moveToSpawnPoint(world: HubsWorld, characterController: CharacterControllerSystem) {
-  spawnJob = coroutine(moveToSpawnPointJob(world, characterController));
+  const moveIntent = waypointMoveIntents.begin();
+  pendingWaypointMoves.cancel();
+  spawnJobs.add(coroutine(moveToSpawnPointJob(world, characterController, moveIntent)));
 }
 
 export function moveToUnoccupiableSpawnPoint(world: HubsWorld, characterController: CharacterControllerSystem) {
@@ -237,18 +272,24 @@ export function waypointSystem(
 
   const beginReservedMove = (eid: EntityID, instant: boolean) => {
     const identity = captureWaypointEntityIdentity(world, eid, waypointReservationId(world, eid));
-    if (!pendingWaypointMoves.begin(identity)) return;
-    tryOccupyWaypoint(world, eid)
-      .then(didOccupy => {
+    const existingIntent = pendingWaypointMoves.intentFor(identity);
+    if (existingIntent && waypointMoveIntents.isCurrent(existingIntent)) return;
+    const moveIntent = waypointMoveIntents.begin();
+    if (!pendingWaypointMoves.begin(identity, moveIntent)) return;
+    tryOccupyWaypoint(world, eid, moveIntent)
+      .then(reservation => {
         if (
-          didOccupy &&
+          reservation &&
+          waypointMoveIntents.isCurrent(moveIntent) &&
           entityExists(world, eid) &&
           isCurrentWaypointEntityIdentity(world, identity, waypointReservationId(world, eid))
         ) {
           moveToWaypoint(world, eid, characterController, instant, true);
+        } else if (reservation) {
+          discardWaypointReservation(world, reservation);
         }
       })
-      .finally(() => pendingWaypointMoves.end(identity));
+      .finally(() => pendingWaypointMoves.end(identity, moveIntent));
   };
 
   // When a scene is opened with a named waypoint we have to make sure that the scene default waypoint
@@ -309,12 +350,7 @@ export function waypointSystem(
     setMatrixWorld(preview, obj.matrixWorld);
   }
 
-  if (spawnJob && spawnJob().done) {
-    spawnJob = null;
-  }
+  spawnJobs.tick();
 }
 
 // TODO: Implement named waypoints and location.hash navigation
-
-// TODO: Don't use any. Write the correct type
-type Coroutine = () => any;

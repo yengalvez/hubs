@@ -2,7 +2,7 @@ import { setMatrixWorld, affixToWorldUp } from "../utils/three-utils";
 import { isTagged } from "../components/tags";
 import { applyPersistentSync } from "../utils/permissions-utils";
 import { waitForDOMContentLoaded } from "../utils/async-utils";
-import { WaypointOccupancyAttempts } from "../utils/waypoint-occupancy-attempts";
+import { WaypointMoveIntentTracker, WaypointOccupancyAttempts } from "../utils/waypoint-occupancy-attempts";
 const calculateIconTransform = (function () {
   const up = new THREE.Vector3();
   const backward = new THREE.Vector3();
@@ -106,6 +106,7 @@ export class WaypointSystem {
     this.ready = [];
     this.previousWaypointHash = null;
     this.initialSpawnHappened = false;
+    this.moveIntents = new WaypointMoveIntentTracker();
     this.occupancyAttempts = new WaypointOccupancyAttempts();
 
     this.waypointForTemplateEl = {};
@@ -121,6 +122,7 @@ export class WaypointSystem {
   }
 
   releaseAnyOccupiedWaypoints() {
+    this.moveIntents.cancel();
     this.occupancyAttempts.cancel();
     if (this.currentWaypoint) {
       unoccupyWaypoint(this.currentWaypoint);
@@ -242,7 +244,14 @@ export class WaypointSystem {
     const candidates = this.ready.filter(component => isUnoccupiableSpawnPoint(component.data));
     return candidates.length && candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
   }
-  async tryToOccupy(waypointComponent) {
+  beginMoveIntent() {
+    return this.moveIntents.begin();
+  }
+  isMoveIntentCurrent(intent) {
+    return this.moveIntents.isCurrent(intent);
+  }
+  async tryToOccupy(waypointComponent, moveIntent = null) {
+    const intent = moveIntent || this.moveIntents.begin();
     const waypointId = waypointReservationId(waypointComponent);
     const hubChannel = window.APP.hubChannel;
     if (!waypointComponent?.data?.canBeOccupied || !waypointId || !hubChannel) return false;
@@ -252,7 +261,7 @@ export class WaypointSystem {
 
     const attempt = this.occupancyAttempts.begin(waypointComponent);
     const reservation = await hubChannel.reserveWaypoint(waypointId);
-    if (!reservation || !this.occupancyAttempts.isCurrent(attempt)) {
+    if (!reservation || !this.moveIntents.isCurrent(intent) || !this.occupancyAttempts.isCurrent(attempt)) {
       if (reservation) hubChannel.releaseWaypointReservation(reservation);
       this.occupancyAttempts.clear(attempt);
       return false;
@@ -271,14 +280,20 @@ export class WaypointSystem {
     this.occupancyAttempts.clear(attempt);
     return true;
   }
-  tryToOccupyAnyOf(waypoints) {
+  tryToOccupyAnyOf(waypoints, moveIntent = null) {
+    const intent = moveIntent || this.moveIntents.begin();
+    if (!this.moveIntents.isCurrent(intent)) return Promise.resolve(undefined);
     if (!waypoints.length) return Promise.resolve(null);
     const candidate = waypoints.splice(Math.floor(Math.random() * waypoints.length), 1)[0];
-    return this.tryToOccupy(candidate).then(didOccupy => {
+    return this.tryToOccupy(candidate, intent).then(didOccupy => {
       if (didOccupy) {
         return Promise.resolve(candidate);
+      } else if (!this.moveIntents.isCurrent(intent)) {
+        // A later click, Sit action or teleport owns movement now. Do not let
+        // this stale spawn search start another candidate and supersede it.
+        return undefined;
       } else {
-        return this.tryToOccupyAnyOf(waypoints);
+        return this.tryToOccupyAnyOf(waypoints, intent);
       }
     });
   }

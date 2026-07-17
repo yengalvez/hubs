@@ -372,8 +372,10 @@ export const NetworkDebugRef = defineComponent({
   ref: Types.eid
 });
 export const Waypoint = defineComponent({
-  flags: Types.ui8
+  flags: Types.ui8,
+  reservationId: Types.ui32
 });
+Waypoint.reservationId[$isStringType] = true;
 export const NetworkedWaypoint = defineComponent({
   occupied: Types.ui8
 });

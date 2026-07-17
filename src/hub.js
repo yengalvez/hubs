@@ -1224,7 +1224,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Cookies.remove(OAUTH_FLOW_PERMS_TOKEN_KEY);
   }
   const hubPhxChannel = socket.channel(`hub:${hubId}`, APP.hubChannelParamsForPermsToken(oauthFlowPermsToken));
-  hubChannel.channel = hubPhxChannel;
+  hubChannel.setChannel(hubPhxChannel);
   hubChannel.presence = new Presence(hubPhxChannel);
   const { rawOnJoin, rawOnLeave } = denoisePresence(presenceEventsForHub(events));
   hubChannel.presence.onJoin(rawOnJoin);
@@ -1354,6 +1354,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const permsToken = oauthFlowPermsToken || data.perms_token;
       hubChannel.setPermissionsFromToken(permsToken);
+      hubChannel.configureWaypointReservations(data.waypoint_reservation);
 
       subscriptions.setHubChannel(hubChannel);
       subscriptions.setSubscribed(data.subscriptions.web_push);

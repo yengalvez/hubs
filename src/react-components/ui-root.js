@@ -113,7 +113,7 @@ import {
   WaypointFlags,
   releaseOccupiedWaypoint,
   tryOccupyWaypoint,
-  moveToSpawnPoint as moveToSpawnPointBitEcs
+  moveToUnoccupiableSpawnPoint as moveToUnoccupiableSpawnPointBitEcs
 } from "../bit-systems/waypoint";
 import { findAncestorWithComponent, shouldUseNewLoader } from "../utils/bit-utils";
 
@@ -844,7 +844,7 @@ class UIRoot extends Component {
         if (!findAncestorWithComponent(world, SceneRoot, eid)) continue;
 
         const flags = Waypoint.flags[eid];
-        const isSeat = !!(flags & WaypointFlags.willDisableMotion);
+        const isSeat = !!(flags & WaypointFlags.willDisableMotion && flags & WaypointFlags.canBeOccupied);
         if (!isSeat) continue;
 
         const obj = world.eid2obj.get(eid);
@@ -860,9 +860,7 @@ class UIRoot extends Component {
       candidates.sort((a, b) => a.distSq - b.distSq);
       for (let i = 0; i < candidates.length; i++) {
         const candidate = candidates[i];
-        const canBeOccupied = !!(candidate.flags & WaypointFlags.canBeOccupied);
-        if (canBeOccupied && !tryOccupyWaypoint(world, candidate.eid)) continue;
-        if (!canBeOccupied) releaseOccupiedWaypoint();
+        if (!(await tryOccupyWaypoint(world, candidate.eid))) continue;
 
         const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
         characterController.shouldLandWhenPossible = true;
@@ -886,7 +884,7 @@ class UIRoot extends Component {
     for (let i = 0; i < waypointSystem.ready.length; i++) {
       const component = waypointSystem.ready[i];
       if (!component || !component.el || !component.el.object3D) continue;
-      if (!component.data.willDisableMotion) continue;
+      if (!component.data.willDisableMotion || !component.data.canBeOccupied) continue;
 
       component.el.object3D.updateMatrices();
       component.el.object3D.getWorldPosition(this._sittingTmpWaypointPos);
@@ -902,25 +900,16 @@ class UIRoot extends Component {
       return;
     }
 
-    // Release any occupied spawnpoints before attempting to occupy a seat.
-    waypointSystem.releaseAnyOccupiedWaypoints();
-
     for (let i = 0; i < candidates.length; i++) {
       const { component } = candidates[i];
+      const didOccupy = await waypointSystem.tryToOccupy(component);
+      if (!didOccupy) continue;
 
-      if (component.data.canBeOccupied) {
-        const didOccupy = await waypointSystem.tryToOccupy(component);
-        if (!didOccupy) continue;
-
-        component.el.object3D.updateMatrices();
-        characterController.shouldLandWhenPossible = true;
-        const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
-        characterController.enqueueWaypointTravelTo(component.el.object3D.matrixWorld, isInstant, component.data);
-        return;
-      } else {
-        waypointSystem.moveToWaypoint(component, false);
-        return;
-      }
+      component.el.object3D.updateMatrices();
+      characterController.shouldLandWhenPossible = true;
+      const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
+      characterController.enqueueWaypointTravelTo(component.el.object3D.matrixWorld, isInstant, component.data);
+      return;
     }
 
     this.notifyNoSeatNearby();
@@ -956,7 +945,8 @@ class UIRoot extends Component {
 
         const flags = Waypoint.flags[eid];
         const isSeat = !!(flags & WaypointFlags.willDisableMotion);
-        if (isSeat) continue;
+        const isOccupiable = !!(flags & WaypointFlags.canBeOccupied);
+        if (isSeat || isOccupiable) continue;
 
         const obj = world.eid2obj.get(eid);
         if (!obj) continue;
@@ -970,7 +960,7 @@ class UIRoot extends Component {
       }
 
       if (!best) {
-        moveToSpawnPointBitEcs(world, characterController);
+        moveToUnoccupiableSpawnPointBitEcs(world, characterController);
         return;
       }
 
@@ -995,7 +985,7 @@ class UIRoot extends Component {
     for (let i = 0; i < waypointSystem.ready.length; i++) {
       const component = waypointSystem.ready[i];
       if (!component || !component.el || !component.el.object3D) continue;
-      if (component.data.willDisableMotion) continue;
+      if (component.data.willDisableMotion || component.data.canBeOccupied) continue;
 
       component.el.object3D.updateMatrices();
       component.el.object3D.getWorldPosition(this._sittingTmpWaypointPos);
@@ -1009,7 +999,7 @@ class UIRoot extends Component {
     if (best && best.component) {
       waypointSystem.moveToWaypoint(best.component, false);
     } else {
-      waypointSystem.moveToSpawnPoint();
+      waypointSystem.moveToUnoccupiableSpawnPoint();
     }
   };
 

@@ -3,6 +3,7 @@ import { EventTarget } from "event-target-shim";
 import { Presence } from "phoenix";
 import { migrateChannelToSocket, discordBridgesForPresences, migrateToChannel } from "./phoenix-utils";
 import configs from "./configs";
+import { WaypointReservationCoordinator } from "./waypoint-reservation-coordinator";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30;
@@ -45,6 +46,10 @@ export default class HubChannel extends EventTarget {
     this._signedIn = !!this.store.state.credentials.token;
     this._permissions = {};
     this._blockedSessionIds = new Set();
+    this.waypointReservations = new WaypointReservationCoordinator({
+      onStateChange: detail => this.dispatchEvent(new CustomEvent("waypoint_reservations_changed", { detail })),
+      onReservationLost: detail => this.dispatchEvent(new CustomEvent("waypoint_reservation_lost", { detail }))
+    });
 
     store.addEventListener("profilechanged", this.sendProfileUpdate.bind(this));
   }
@@ -109,6 +114,7 @@ export default class HubChannel extends EventTarget {
     }
 
     this.channel = await migrateChannelToSocket(this.channel, socket, params);
+    this.waypointReservations.setChannel(this.channel);
     this.presence = new Presence(this.channel);
 
     if (presenceBindings) {
@@ -137,10 +143,12 @@ export default class HubChannel extends EventTarget {
     }
 
     this.channel = newChannel;
+    this.waypointReservations.setChannel(this.channel);
     this.presence = new Presence(this.channel);
     this.hubId = data.hubs[0].hub_id;
 
     this.setPermissionsFromToken(data.perms_token);
+    this.configureWaypointReservations(data.waypoint_reservation);
 
     if (presenceBindings) {
       this.presence.onJoin(presenceBindings.onJoin);
@@ -148,6 +156,33 @@ export default class HubChannel extends EventTarget {
       this.presence.onSync(presenceBindings.onSync);
     }
     return data;
+  }
+
+  setChannel(channel) {
+    this.channel = channel;
+    this.waypointReservations.setChannel(channel);
+  }
+
+  configureWaypointReservations(capability) {
+    this.waypointReservations.configure(capability);
+  }
+
+  /** @returns {Promise<{waypointId: string, reservationId: string, claimId: string} | null>} */
+  reserveWaypoint(waypointId) {
+    return this.waypointReservations.reserveWithHandle(waypointId);
+  }
+
+  /** @param {{waypointId: string, reservationId: string, claimId: string} | null} [expectedReservation] */
+  releaseWaypointReservation(expectedReservation = null) {
+    return this.waypointReservations.release(expectedReservation);
+  }
+
+  isWaypointReserved(waypointId) {
+    return this.waypointReservations.isReserved(waypointId);
+  }
+
+  get currentWaypointReservationId() {
+    return this.waypointReservations.currentWaypointId;
   }
 
   setPermissionsFromToken = token => {
@@ -166,10 +201,13 @@ export default class HubChannel extends EventTarget {
   };
 
   sendEnteringEvent = async () => {
+    if (!this.channel || this._enteringEventChannel === this.channel) return;
+    this._enteringEventChannel = this.channel;
     this.channel.push("events:entering", {});
   };
 
   sendEnteringCancelledEvent = async () => {
+    this._enteringEventChannel = null;
     this.channel.push("events:entering_cancelled", {});
   };
 
@@ -207,6 +245,7 @@ export default class HubChannel extends EventTarget {
     };
 
     this.channel.push("events:entered", entryEvent);
+    this._enteringEventChannel = null;
   };
 
   beginStreaming() {

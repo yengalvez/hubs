@@ -1,25 +1,26 @@
-import { defineQuery, entityExists, exitQuery, hasComponent } from "bitecs";
+import { defineQuery, entityExists, hasComponent } from "bitecs";
 import { Matrix4, Mesh, MeshStandardMaterial, Object3D } from "three";
 import { HubsWorld } from "../app";
 import {
   HoveredRemoteLeft,
   HoveredRemoteRight,
   Interacted,
-  Networked,
   NetworkedWaypoint,
-  Owned,
   SceneRoot,
   Waypoint,
   WaypointPreview
 } from "../bit-components";
 import { CharacterControllerSystem } from "../systems/character-controller-system";
-import { sleep } from "../utils/async-utils";
 import { anyEntityWith, findAncestorWithComponent } from "../utils/bit-utils";
 import { coroutine } from "../utils/coroutine";
 import { EntityID } from "../utils/networking-types";
 import { takeOwnership } from "../utils/take-ownership";
-import { takeSoftOwnership } from "../utils/take-soft-ownership";
 import { setMatrixWorld } from "../utils/three-utils";
+import {
+  captureWaypointEntityIdentity,
+  isCurrentWaypointEntityIdentity,
+  PendingWaypointEntityMoves
+} from "../utils/waypoint-entity-identity";
 
 export enum WaypointFlags {
   canBeSpawnPoint = 1 << 0,
@@ -34,37 +35,69 @@ export enum WaypointFlags {
 const waypointQuery = defineQuery([Waypoint]);
 
 let myOccupiedWaypoint = 0;
+let myOccupiedWaypointObject: Object3D | null = null;
+const pendingWaypointMoves = new PendingWaypointEntityMoves();
 
-export function releaseOccupiedWaypoint() {
+export function waypointReservationId(world: HubsWorld, eid: EntityID) {
+  if (!entityExists(world, eid) || !hasComponent(world, Waypoint, eid)) return null;
+  const waypointId = APP.getString(Waypoint.reservationId[eid]);
+  return typeof waypointId === "string" && waypointId.length > 0 ? waypointId : null;
+}
+
+function clearLocalOccupiedWaypoint(world: HubsWorld | null = window.APP?.world || null) {
   if (myOccupiedWaypoint) {
-    NetworkedWaypoint.occupied[myOccupiedWaypoint] = 0;
+    if (!world || world.eid2obj.get(myOccupiedWaypoint) === myOccupiedWaypointObject) {
+      NetworkedWaypoint.occupied[myOccupiedWaypoint] = 0;
+    }
     myOccupiedWaypoint = 0;
+    myOccupiedWaypointObject = null;
   }
 }
 
-export function tryOccupyWaypoint(world: HubsWorld, eid: EntityID) {
+export function releaseOccupiedWaypoint() {
+  clearLocalOccupiedWaypoint();
+  return window.APP.hubChannel ? window.APP.hubChannel.releaseWaypointReservation() : Promise.resolve(false);
+}
+
+export async function tryOccupyWaypoint(world: HubsWorld, eid: EntityID) {
   if (
     !entityExists(world, eid) ||
     !hasComponent(world, NetworkedWaypoint, eid) ||
-    NetworkedWaypoint.occupied[eid]
+    !(Waypoint.flags[eid] & WaypointFlags.canBeOccupied)
   ) {
     return false;
   }
 
-  releaseOccupiedWaypoint();
-  takeOwnership(world, eid);
-  if (!hasComponent(world, Owned, eid)) return false;
+  const waypointId = waypointReservationId(world, eid);
+  const hubChannel = window.APP.hubChannel;
+  if (!waypointId || !hubChannel) return false;
+  const waypointIdentity = captureWaypointEntityIdentity(world, eid, waypointId);
+  if (!waypointIdentity) return false;
+  if (hubChannel.isWaypointReserved(waypointId) && hubChannel.currentWaypointReservationId !== waypointId) {
+    return false;
+  }
 
+  const reservation = await hubChannel.reserveWaypoint(waypointId);
+  if (!reservation) return false;
+  if (
+    !entityExists(world, eid) ||
+    !hasComponent(world, NetworkedWaypoint, eid) ||
+    !isCurrentWaypointEntityIdentity(world, waypointIdentity, waypointReservationId(world, eid))
+  ) {
+    hubChannel.releaseWaypointReservation(reservation);
+    return false;
+  }
+
+  clearLocalOccupiedWaypoint(world);
+  takeOwnership(world, eid);
   occupyWaypoint(world, eid);
   return true;
 }
 
 function occupyWaypoint(world: HubsWorld, eid: EntityID) {
-  if (!hasComponent(world, Owned, eid)) {
-    throw new Error("Tried to occupy waypoint before owning it.");
-  }
   NetworkedWaypoint.occupied[eid] = 1;
   myOccupiedWaypoint = eid;
+  myOccupiedWaypointObject = world.eid2obj.get(eid) || null;
 }
 
 function nonOccupiableSpawnPoints(world: HubsWorld) {
@@ -79,27 +112,32 @@ function occupiableSpawnPoints(world: HubsWorld) {
   return waypointQuery(world).filter(eid => {
     const canBeSpawnPoint = Waypoint.flags[eid] & WaypointFlags.canBeSpawnPoint;
     const canBeOccupied = Waypoint.flags[eid] & WaypointFlags.canBeOccupied;
-    return (
+    const waypointId = waypointReservationId(world, eid);
+    return !!(
       canBeSpawnPoint &&
       canBeOccupied &&
-      !NetworkedWaypoint.occupied[eid] &&
+      waypointId &&
+      !window.APP.hubChannel?.isWaypointReserved(waypointId) &&
       findAncestorWithComponent(world, SceneRoot, eid)
     );
   });
 }
 
-function* tryOccupyAndSpawn(world: HubsWorld, characterController: CharacterControllerSystem, spawnPoint: EntityID) {
-  moveToWaypoint(world, spawnPoint, characterController, true);
-  takeSoftOwnership(world, spawnPoint);
-  occupyWaypoint(world, spawnPoint);
-  // TODO: We could check if we lost ownership, and not wait as long "lostOwnershipWithTimeout"
-  yield sleep(2000);
-  if (entityExists(world, spawnPoint) && hasComponent(world, Owned, spawnPoint)) {
-    takeOwnership(world, spawnPoint);
-    return true;
-  } else {
+function* tryOccupyAndSpawn(
+  world: HubsWorld,
+  characterController: CharacterControllerSystem,
+  spawnPoint: EntityID
+): Generator<Promise<boolean>, boolean, boolean> {
+  const identity = captureWaypointEntityIdentity(world, spawnPoint, waypointReservationId(world, spawnPoint));
+  if (!identity) return false;
+  const didOccupy = yield tryOccupyWaypoint(world, spawnPoint);
+  if (!didOccupy) return false;
+  if (!isCurrentWaypointEntityIdentity(world, identity, waypointReservationId(world, spawnPoint))) {
+    if (myOccupiedWaypointObject === identity.object3D) releaseOccupiedWaypoint();
     return false;
   }
+  moveToWaypoint(world, spawnPoint, characterController, true, true);
+  return true;
 }
 
 function* trySpawnIntoOccupiable(world: HubsWorld, characterController: CharacterControllerSystem) {
@@ -120,19 +158,7 @@ function* trySpawnIntoOccupiable(world: HubsWorld, characterController: Characte
 function* moveToSpawnPointJob(world: HubsWorld, characterController: CharacterControllerSystem) {
   if (yield* trySpawnIntoOccupiable(world, characterController)) return;
 
-  const spawnPoints = nonOccupiableSpawnPoints(world);
-  if (spawnPoints.length) {
-    const waypoint = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
-    moveToWaypoint(world, waypoint, characterController, true);
-  } else {
-    console.warn("Could not find any available spawn points, spawning at the origin.");
-    characterController.enqueueWaypointTravelTo(new Matrix4().identity(), true, {
-      willDisableMotion: false,
-      willDisableTeleporting: false,
-      snapToNavMesh: true,
-      willMaintainInitialOrientation: false
-    });
-  }
+  moveToUnoccupiableSpawnPoint(world, characterController);
   initialSpawnHappened = true;
 }
 
@@ -141,12 +167,33 @@ export function moveToSpawnPoint(world: HubsWorld, characterController: Characte
   spawnJob = coroutine(moveToSpawnPointJob(world, characterController));
 }
 
+export function moveToUnoccupiableSpawnPoint(world: HubsWorld, characterController: CharacterControllerSystem) {
+  releaseOccupiedWaypoint();
+  const spawnPoints = nonOccupiableSpawnPoints(world);
+  if (spawnPoints.length) {
+    const waypoint = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+    moveToWaypoint(world, waypoint, characterController, true, true);
+    return waypoint;
+  }
+
+  console.warn("Could not find an unoccupied spawn point, spawning at the origin.");
+  characterController.enqueueWaypointTravelTo(new Matrix4().identity(), true, {
+    willDisableMotion: false,
+    willDisableTeleporting: false,
+    snapToNavMesh: true,
+    willMaintainInitialOrientation: false
+  });
+  return null;
+}
+
 function moveToWaypoint(
   world: HubsWorld,
   eid: number,
   characterController: CharacterControllerSystem,
-  instant: boolean
+  instant: boolean,
+  preserveReservation = false
 ) {
+  if (!preserveReservation) releaseOccupiedWaypoint();
   const obj = world.eid2obj.get(eid)!;
   obj.updateMatrices();
 
@@ -165,8 +212,6 @@ function moveToWaypoint(
 const hoveredLeftWaypointQuery = defineQuery([Waypoint, HoveredRemoteLeft]);
 const hoveredRightWaypointQuery = defineQuery([Waypoint, HoveredRemoteRight]);
 
-const exitedOwnedQuery = exitQuery(defineQuery([Owned]));
-
 // Todo: Find a better place for this system state variables, maybe in a scene component?
 let preview: Object3D | null;
 let initialSpawnHappened: boolean = false;
@@ -176,11 +221,35 @@ export function waypointSystem(
   characterController: CharacterControllerSystem,
   sceneIsFrozen: boolean
 ) {
-  if (exitedOwnedQuery(world).includes(myOccupiedWaypoint)) {
-    myOccupiedWaypoint = 0;
-    characterController.cancelWaypointTravel();
-    moveToSpawnPoint(world, characterController);
+  if (myOccupiedWaypoint) {
+    const occupiedWaypointId = waypointReservationId(world, myOccupiedWaypoint);
+    const occupiedWaypointIsCurrent =
+      world.eid2obj.get(myOccupiedWaypoint) === myOccupiedWaypointObject &&
+      occupiedWaypointId &&
+      window.APP.hubChannel?.currentWaypointReservationId === occupiedWaypointId;
+    if (!occupiedWaypointIsCurrent) {
+      clearLocalOccupiedWaypoint(world);
+      characterController.setSittingState(false);
+      characterController.cancelWaypointTravel();
+      moveToUnoccupiableSpawnPoint(world, characterController);
+    }
   }
+
+  const beginReservedMove = (eid: EntityID, instant: boolean) => {
+    const identity = captureWaypointEntityIdentity(world, eid, waypointReservationId(world, eid));
+    if (!pendingWaypointMoves.begin(identity)) return;
+    tryOccupyWaypoint(world, eid)
+      .then(didOccupy => {
+        if (
+          didOccupy &&
+          entityExists(world, eid) &&
+          isCurrentWaypointEntityIdentity(world, identity, waypointReservationId(world, eid))
+        ) {
+          moveToWaypoint(world, eid, characterController, instant, true);
+        }
+      })
+      .finally(() => pendingWaypointMoves.end(identity));
+  };
 
   // When a scene is opened with a named waypoint we have to make sure that the scene default waypoint
   // doesn't override it and that we correctly spawn in the named waypoint from the url.
@@ -195,7 +264,11 @@ export function waypointSystem(
     waypointQuery(world).forEach(eid => {
       const waypointObj = world.eid2obj.get(eid)!;
       if (waypointObj.name === waypointName) {
-        moveToWaypoint(world, eid, characterController, previousWaypointHash === null);
+        if (Waypoint.flags[eid] & WaypointFlags.canBeOccupied) {
+          beginReservedMove(eid, previousWaypointHash === null);
+        } else {
+          moveToWaypoint(world, eid, characterController, previousWaypointHash === null);
+        }
         window.history.replaceState(null, "", window.location.href.split("#")[0]); // Reset so you can re-activate the same waypoint
         previousWaypointHash = window.location.hash;
       }
@@ -203,24 +276,14 @@ export function waypointSystem(
   }
 
   waypointQuery(world).forEach(eid => {
-    if (hasComponent(world, NetworkedWaypoint, eid) && hasComponent(world, Owned, eid) && eid !== myOccupiedWaypoint) {
-      // Inherited this waypoint, clear its occupied state
-      if (NetworkedWaypoint.occupied[eid]) {
-        NetworkedWaypoint.occupied[eid] = 0;
-      }
+    if (hasComponent(world, NetworkedWaypoint, eid)) {
+      const waypointId = waypointReservationId(world, eid);
+      NetworkedWaypoint.occupied[eid] = waypointId && window.APP.hubChannel?.isWaypointReserved(waypointId) ? 1 : 0;
     }
 
     if (hasComponent(world, Interacted, eid)) {
       if (hasComponent(world, NetworkedWaypoint, eid)) {
-        if (NetworkedWaypoint.occupied[eid]) {
-          // We don't expect to get here:
-          // We should be able to interact with an occupied waypoint...
-          console.error("Interacted with an occupied waypoint. Doing nothing.");
-        } else {
-          takeOwnership(world, eid);
-          occupyWaypoint(world, eid);
-          moveToWaypoint(world, eid, characterController, false);
-        }
+        beginReservedMove(eid, false);
       } else {
         moveToWaypoint(world, eid, characterController, false);
       }

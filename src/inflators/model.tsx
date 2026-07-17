@@ -5,6 +5,7 @@ import { GLTFModel, MaterialTag, MixerAnimatableInitialize } from "../bit-compon
 import { addMaterialComponent, addObject3DComponent, gltfInflatorExists, gltfInflators } from "../utils/jsx-entity";
 import { mapMaterials } from "../utils/material-utils";
 import { EntityID } from "../utils/networking-types";
+import { stableWaypointReservationId } from "../utils/waypoint-reservation-id";
 import { inflateLoopAnimationInitialize, LoopAnimationParams } from "./loop-animation";
 
 function camelCase(s: string) {
@@ -38,7 +39,8 @@ function inflateComponents(
       return;
     }
 
-    const props = components[name];
+    const reservationId = name === "waypoint" ? stableWaypointReservationId(components) : null;
+    const props = reservationId ? { ...components[name], reservationId } : components[name];
     Object.keys(props).forEach(propName => {
       const value = props[propName];
       const linkType = value?.__mhc_link_type;

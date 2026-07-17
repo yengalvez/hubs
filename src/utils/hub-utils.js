@@ -1,4 +1,17 @@
 import configs from "./configs";
+import { v4 as uuid } from "uuid";
+import { WAYPOINT_RESERVATION_PROTOCOL } from "./waypoint-reservation-coordinator";
+
+let waypointReservationClientInstanceId;
+
+export function getWaypointReservationClientInstanceId() {
+  // Keep this in memory, not sessionStorage: duplicated tabs can inherit a
+  // copied sessionStorage and must still receive distinct channel identities.
+  // The value remains stable across every socket migration in this page.
+  if (!waypointReservationClientInstanceId) waypointReservationClientInstanceId = uuid();
+  return waypointReservationClientInstanceId;
+}
+
 export function getCurrentHubId() {
   const qs = new URLSearchParams(location.search);
   const defaultRoomId = configs.feature("default_room_id");
@@ -46,7 +59,7 @@ export function createHubChannelParams({
   authToken,
   botRunner
 }) {
-  return {
+  const params = {
     profile,
     push_subscription_endpoint: pushSubscriptionEndpoint,
     auth_token: authToken || null,
@@ -59,6 +72,15 @@ export function createHubChannelParams({
     },
     hub_invite_id: hubInviteId
   };
+
+  if (!botRunner) {
+    params.waypoint_reservation = {
+      protocol: WAYPOINT_RESERVATION_PROTOCOL,
+      client_instance_id: getWaypointReservationClientInstanceId()
+    };
+  }
+
+  return params;
 }
 
 export function isRoomOwner(clientId) {

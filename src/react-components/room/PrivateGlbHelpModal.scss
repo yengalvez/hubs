@@ -15,7 +15,7 @@
 }
 
 :local(.steps) {
-  counter-reset: avaturn-step;
+  counter-reset: private-glb-step;
   display: grid;
   gap: 10px;
   margin: 0;
@@ -24,7 +24,7 @@
 }
 
 :local(.step) {
-  counter-increment: avaturn-step;
+  counter-increment: private-glb-step;
   position: relative;
   min-height: 44px;
   padding: 11px 14px 11px 52px;
@@ -34,7 +34,7 @@
   line-height: 1.4;
 
   &::before {
-    content: counter(avaturn-step);
+    content: counter(private-glb-step);
     position: absolute;
     top: 50%;
     left: 12px;
@@ -56,13 +56,4 @@
   border-radius: 0 var(--mv-radius-sm) var(--mv-radius-sm) 0;
   background: rgba(38, 209, 255, 0.08);
   color: theme.$text2-color;
-}
-
-:local(.link) {
-  align-self: flex-start;
-  text-align: center;
-
-  @media (max-width: theme.$breakpoint-lg - 1) {
-    align-self: stretch;
-  }
 }

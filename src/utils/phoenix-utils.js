@@ -3,6 +3,7 @@ import { generateHubName } from "../utils/name-generation";
 import configs from "../utils/configs";
 import { sleep } from "../utils/async-utils";
 import { store } from "../utils/store-instance";
+import { redactPhoenixDebugData, redactPhoenixDebugText } from "./phoenix-debug-redaction";
 
 export function hasReticulumServer() {
   return !!configs.RETICULUM_SERVER;
@@ -145,7 +146,7 @@ export async function connectToReticulum(debug = false, params = null, socketCla
 
   if (debug) {
     socketSettings.logger = (kind, msg, data) => {
-      console.log(`${kind}: ${msg}`, data);
+      console.log(`${redactPhoenixDebugText(kind)}: ${redactPhoenixDebugText(msg)}`, redactPhoenixDebugData(data));
     };
   }
 
@@ -175,7 +176,7 @@ export function getLandingPageForPhoto(photoUrl) {
   return getReticulumFetchUrl(parsedUrl.pathname.replace(".png", ".html") + parsedUrl.search, true);
 }
 
-export function fetchReticulumAuthenticatedWithToken(token, url, method = "GET", payload) {
+export function fetchReticulumAuthenticatedWithToken(token, url, method = "GET", payload, requestOptions = {}) {
   const retUrl = getReticulumFetchUrl(url);
   const params = {
     headers: { "content-type": "application/json" },
@@ -187,6 +188,9 @@ export function fetchReticulumAuthenticatedWithToken(token, url, method = "GET",
   if (payload) {
     params.body = JSON.stringify(payload);
   }
+  if (requestOptions.signal) {
+    params.signal = requestOptions.signal;
+  }
   return fetch(retUrl, params).then(async r => {
     const result = await r.text();
     try {
@@ -197,8 +201,8 @@ export function fetchReticulumAuthenticatedWithToken(token, url, method = "GET",
     }
   });
 }
-export function fetchReticulumAuthenticated(url, method = "GET", payload) {
-  return fetchReticulumAuthenticatedWithToken(store.state.credentials.token, url, method, payload);
+export function fetchReticulumAuthenticated(url, method = "GET", payload, requestOptions) {
+  return fetchReticulumAuthenticatedWithToken(store.state.credentials.token, url, method, payload, requestOptions);
 }
 
 export async function createAndRedirectToNewHub(name, sceneId, replace, qs) {

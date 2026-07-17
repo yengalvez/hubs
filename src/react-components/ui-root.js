@@ -107,13 +107,16 @@ import { ChatContextProvider } from "./room/contexts/ChatContext";
 import ChatToolbarButton from "./room/components/ChatToolbarButton/ChatToolbarButton";
 import SeePlansCTA from "./room/components/SeePlansCTA/SeePlansCTA";
 import { CAMERA_MODE_FIRST_PERSON, CAMERA_MODE_THIRD_PERSON_VIEW } from "../systems/camera-system";
+import { botChatResetStatePatch } from "../utils/bot-chat-lifecycle";
 import { defineQuery } from "bitecs";
 import { SceneRoot, Waypoint } from "../bit-components";
 import {
   WaypointFlags,
+  beginWaypointMoveIntent,
+  isCurrentWaypointMoveIntent,
   releaseOccupiedWaypoint,
   tryOccupyWaypoint,
-  moveToSpawnPoint as moveToSpawnPointBitEcs
+  moveToUnoccupiableSpawnPoint as moveToUnoccupiableSpawnPointBitEcs
 } from "../bit-systems/waypoint";
 import { findAncestorWithComponent, shouldUseNewLoader } from "../utils/bit-utils";
 
@@ -286,6 +289,8 @@ class UIRoot extends Component {
     super(props);
 
     props.mediaSearchStore.setHistory(props.history);
+    this._botChatSessionEpoch = 0;
+    this._botChatCredentialToken = props.store.state.credentials.token || null;
 
     // An exit handler that discards event arguments and can be cleaned up.
     this.exitEventHandler = () => this.props.exitScene();
@@ -294,6 +299,15 @@ class UIRoot extends Component {
 
   componentDidUpdate(prevProps) {
     const { hubChannel, showSignInDialog } = this.props;
+    if (prevProps.hubChannel !== hubChannel) {
+      if (prevProps.hubChannel) {
+        prevProps.hubChannel.removeEventListener("bot_chat_capability_changed", this.onBotChatCapabilityChanged);
+      }
+      if (hubChannel) {
+        hubChannel.addEventListener("bot_chat_capability_changed", this.onBotChatCapabilityChanged);
+      }
+      this.resetBotChatState();
+    }
     if (hubChannel) {
       const { signedIn } = hubChannel;
       if (signedIn !== this.state.signedIn) {
@@ -358,14 +372,9 @@ class UIRoot extends Component {
 
     const prevHubSid = prevProps.hub?.hub_id;
     const nextHubSid = this.props.hub?.hub_id;
-    if (prevHubSid !== nextHubSid && Object.keys(this.state.botChatSessions).length) {
-      // Session-only bot chat history: keep it while in the room, but drop it once we leave/switch rooms.
-      this.setState({
-        botChatSessions: {},
-        selectedBotForChat: null,
-        nearestBot: null,
-        sidebarId: this.state.sidebarId === "bot-chat" ? null : this.state.sidebarId
-      });
+    if (prevHubSid !== nextHubSid) {
+      // Session-only bot chat history is scoped to one room and one authenticated capability epoch.
+      this.resetBotChatState();
     }
   }
 
@@ -395,6 +404,9 @@ class UIRoot extends Component {
     window.addEventListener("idle_detected", this.onIdleDetected);
     window.addEventListener("activity_detected", this.onActivityDetected);
     window.addEventListener("focus_chat", this.onFocusChat);
+    if (this.props.hubChannel) {
+      this.props.hubChannel.addEventListener("bot_chat_capability_changed", this.onBotChatCapabilityChanged);
+    }
     document.querySelector(".a-canvas").addEventListener("mouseup", () => {
       if (this.state.showShareDialog) {
         this.setState({ showShareDialog: false });
@@ -504,6 +516,9 @@ class UIRoot extends Component {
     this.props.scene.removeEventListener("sitting-state-changed", this.onSittingStateChanged);
     this.props.scene.removeEventListener("action_media_tweet", this.onTweet);
     this.props.store.removeEventListener("statechanged", this.storeUpdated);
+    if (this.props.hubChannel) {
+      this.props.hubChannel.removeEventListener("bot_chat_capability_changed", this.onBotChatCapabilityChanged);
+    }
     window.removeEventListener("concurrentload", this.onConcurrentLoad);
     window.removeEventListener("idle_detected", this.onIdleDetected);
     window.removeEventListener("activity_detected", this.onActivityDetected);
@@ -515,7 +530,25 @@ class UIRoot extends Component {
   }
 
   storeUpdated = () => {
+    const nextCredentialToken = this.props.store.state.credentials.token || null;
+    if (nextCredentialToken !== this._botChatCredentialToken) {
+      this._botChatCredentialToken = nextCredentialToken;
+      this.resetBotChatState();
+      return;
+    }
     this.forceUpdate();
+  };
+
+  onBotChatCapabilityChanged = () => {
+    this.resetBotChatState();
+  };
+
+  resetBotChatState = (additionalState = {}) => {
+    this._botChatSessionEpoch += 1;
+    this.setState(prevState => ({
+      ...botChatResetStatePatch(prevState.sidebarId),
+      ...additionalState
+    }));
   };
 
   showContextualSignInDialog = () => {
@@ -844,7 +877,7 @@ class UIRoot extends Component {
         if (!findAncestorWithComponent(world, SceneRoot, eid)) continue;
 
         const flags = Waypoint.flags[eid];
-        const isSeat = !!(flags & WaypointFlags.willDisableMotion);
+        const isSeat = !!(flags & WaypointFlags.willDisableMotion && flags & WaypointFlags.canBeOccupied);
         if (!isSeat) continue;
 
         const obj = world.eid2obj.get(eid);
@@ -858,11 +891,18 @@ class UIRoot extends Component {
       }
 
       candidates.sort((a, b) => a.distSq - b.distSq);
+      if (!candidates.length) {
+        this.notifyNoSeatNearby();
+        return;
+      }
+
+      const moveIntent = beginWaypointMoveIntent();
       for (let i = 0; i < candidates.length; i++) {
         const candidate = candidates[i];
-        const canBeOccupied = !!(candidate.flags & WaypointFlags.canBeOccupied);
-        if (canBeOccupied && !tryOccupyWaypoint(world, candidate.eid)) continue;
-        if (!canBeOccupied) releaseOccupiedWaypoint();
+        if (!(await tryOccupyWaypoint(world, candidate.eid, moveIntent))) {
+          if (!isCurrentWaypointMoveIntent(moveIntent)) return;
+          continue;
+        }
 
         const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
         characterController.shouldLandWhenPossible = true;
@@ -886,7 +926,7 @@ class UIRoot extends Component {
     for (let i = 0; i < waypointSystem.ready.length; i++) {
       const component = waypointSystem.ready[i];
       if (!component || !component.el || !component.el.object3D) continue;
-      if (!component.data.willDisableMotion) continue;
+      if (!component.data.willDisableMotion || !component.data.canBeOccupied) continue;
 
       component.el.object3D.updateMatrices();
       component.el.object3D.getWorldPosition(this._sittingTmpWaypointPos);
@@ -902,25 +942,20 @@ class UIRoot extends Component {
       return;
     }
 
-    // Release any occupied spawnpoints before attempting to occupy a seat.
-    waypointSystem.releaseAnyOccupiedWaypoints();
-
+    const moveIntent = waypointSystem.beginMoveIntent();
     for (let i = 0; i < candidates.length; i++) {
       const { component } = candidates[i];
-
-      if (component.data.canBeOccupied) {
-        const didOccupy = await waypointSystem.tryToOccupy(component);
-        if (!didOccupy) continue;
-
-        component.el.object3D.updateMatrices();
-        characterController.shouldLandWhenPossible = true;
-        const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
-        characterController.enqueueWaypointTravelTo(component.el.object3D.matrixWorld, isInstant, component.data);
-        return;
-      } else {
-        waypointSystem.moveToWaypoint(component, false);
-        return;
+      const didOccupy = await waypointSystem.tryToOccupy(component, moveIntent);
+      if (!didOccupy) {
+        if (!waypointSystem.isMoveIntentCurrent(moveIntent)) return;
+        continue;
       }
+
+      component.el.object3D.updateMatrices();
+      characterController.shouldLandWhenPossible = true;
+      const isInstant = !window.APP.store.state.preferences.animateWaypointTransitions;
+      characterController.enqueueWaypointTravelTo(component.el.object3D.matrixWorld, isInstant, component.data);
+      return;
     }
 
     this.notifyNoSeatNearby();
@@ -956,7 +991,8 @@ class UIRoot extends Component {
 
         const flags = Waypoint.flags[eid];
         const isSeat = !!(flags & WaypointFlags.willDisableMotion);
-        if (isSeat) continue;
+        const isOccupiable = !!(flags & WaypointFlags.canBeOccupied);
+        if (isSeat || isOccupiable) continue;
 
         const obj = world.eid2obj.get(eid);
         if (!obj) continue;
@@ -970,7 +1006,7 @@ class UIRoot extends Component {
       }
 
       if (!best) {
-        moveToSpawnPointBitEcs(world, characterController);
+        moveToUnoccupiableSpawnPointBitEcs(world, characterController);
         return;
       }
 
@@ -995,7 +1031,7 @@ class UIRoot extends Component {
     for (let i = 0; i < waypointSystem.ready.length; i++) {
       const component = waypointSystem.ready[i];
       if (!component || !component.el || !component.el.object3D) continue;
-      if (component.data.willDisableMotion) continue;
+      if (component.data.willDisableMotion || component.data.canBeOccupied) continue;
 
       component.el.object3D.updateMatrices();
       component.el.object3D.getWorldPosition(this._sittingTmpWaypointPos);
@@ -1009,7 +1045,7 @@ class UIRoot extends Component {
     if (best && best.component) {
       waypointSystem.moveToWaypoint(best.component, false);
     } else {
-      waypointSystem.moveToSpawnPoint();
+      waypointSystem.moveToUnoccupiableSpawnPoint();
     }
   };
 
@@ -1158,11 +1194,11 @@ class UIRoot extends Component {
     }
   };
 
-  appendBotChatMessage = (botId, botName, message) => {
-    const key = this.getBotChatSessionKey(botId);
-    if (!key) return;
+  appendBotChatMessage = (key, botId, botName, message, expectedSessionEpoch) => {
+    if (!key || expectedSessionEpoch !== this._botChatSessionEpoch) return;
 
     this.setState(prevState => {
+      if (expectedSessionEpoch !== this._botChatSessionEpoch) return null;
       const existing = prevState.botChatSessions[key] || { botId, botName: botName || botId, messages: [], draft: "" };
       const updated = {
         ...existing,
@@ -1178,11 +1214,11 @@ class UIRoot extends Component {
     });
   };
 
-  setBotChatDraft = (botId, botName, draft) => {
-    const key = this.getBotChatSessionKey(botId);
-    if (!key) return;
+  setBotChatDraft = (key, botId, botName, draft, expectedSessionEpoch) => {
+    if (!key || expectedSessionEpoch !== this._botChatSessionEpoch) return;
 
     this.setState(prevState => {
+      if (expectedSessionEpoch !== this._botChatSessionEpoch) return null;
       const existing = prevState.botChatSessions[key] || { botId, botName: botName || botId, messages: [], draft: "" };
       const updated = {
         ...existing,
@@ -1202,7 +1238,7 @@ class UIRoot extends Component {
 
   signOut = async () => {
     await this.props.authChannel.signOut(this.props.hubChannel);
-    this.setState({ signedIn: false });
+    this.resetBotChatState({ signedIn: false });
   };
 
   onMiniInviteClicked = () => {
@@ -1576,6 +1612,9 @@ class UIRoot extends Component {
     const activeBotChatSession = activeBotChatKey ? this.state.botChatSessions[activeBotChatKey] : null;
     const activeBotChatMessages = (activeBotChatSession && activeBotChatSession.messages) || [];
     const activeBotChatDraft = (activeBotChatSession && activeBotChatSession.draft) || "";
+    const activeBotChatName =
+      activeBotChatSession?.botName || this.state.selectedBotForChat?.botName || activeBotChatId;
+    const botChatSessionEpoch = this._botChatSessionEpoch;
     const inVrMode = this.props.scene?.is("vr-mode");
     const buildVersionInfo = enteredOrWatching ? getBuildVersionInfo() : null;
     const displayNameOverride = this.props.hubIsBound
@@ -1680,10 +1719,7 @@ class UIRoot extends Component {
                 id: "sign-out",
                 label: <FormattedMessage id="more-menu.sign-out" defaultMessage="Sign Out" />,
                 icon: LeaveIcon,
-                onClick: async () => {
-                  await this.props.authChannel.signOut(this.props.hubChannel);
-                  this.setState({ signedIn: false });
-                }
+                onClick: this.signOut
               }
             : {
                 id: "sign-in",
@@ -2126,21 +2162,26 @@ class UIRoot extends Component {
                           messages={activeBotChatMessages}
                           inputValue={activeBotChatDraft}
                           sendingDisabled={!botChatEnabled}
+                          sessionEpoch={botChatSessionEpoch}
                           conversations={botChatConversations}
                           activeBotId={activeBotChatId}
                           onSelectConversation={this.selectBotChatConversation}
                           onInputChange={value =>
                             this.setBotChatDraft(
-                              this.state.selectedBotForChat.botId,
-                              this.state.selectedBotForChat.botName,
-                              value
+                              activeBotChatKey,
+                              activeBotChatId,
+                              activeBotChatName,
+                              value,
+                              botChatSessionEpoch
                             )
                           }
                           onAppendMessage={message =>
                             this.appendBotChatMessage(
-                              this.state.selectedBotForChat.botId,
-                              this.state.selectedBotForChat.botName,
-                              message
+                              activeBotChatKey,
+                              activeBotChatId,
+                              activeBotChatName,
+                              message,
+                              botChatSessionEpoch
                             )
                           }
                           onClose={() => this.setSidebar(null)}

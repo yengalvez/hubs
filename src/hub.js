@@ -290,6 +290,16 @@ import { exposeBitECSDebugHelpers } from "./bitecs-debug-helpers";
 import { loadLegacyRoomObjects } from "./utils/load-legacy-room-objects";
 import { loadSavedEntityStates } from "./utils/entity-state-utils";
 import { shouldUseNewLoader } from "./utils/bit-utils";
+import { getSittingWaypointDiagnosticsForTests } from "./utils/sitting-waypoint-diagnostics";
+
+window.APP.getSittingWaypointDiagnosticsForTests = () =>
+  getSittingWaypointDiagnosticsForTests({
+    useBitECS: shouldUseNewLoader(),
+    world: window.APP.world,
+    waypointSystem: AFRAME.scenes[0]?.systems?.["hubs-systems"]?.waypointSystem,
+    getString: sid => window.APP.getString(sid),
+    getNetworkOwner: element => NAF.utils.getNetworkOwner(element)
+  });
 
 const PHOENIX_RELIABLE_NAF = "phx-reliable";
 NAF.options.firstSyncSource = PHOENIX_RELIABLE_NAF;
@@ -871,13 +881,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     );
   });
 
-  window.addEventListener("action_create_avaturn_avatar", () => {
+  const createPrivateGlbAvatar = () => {
     performConditionalSignIn(
       () => hubChannel.signedIn,
-      () => pushHistoryState(history, "overlay", "avatar-editor", { mode: "avaturn-private" }),
+      () => pushHistoryState(history, "overlay", "avatar-editor", { mode: "private-glb" }),
       SignInMessages.createAvatar
     );
-  });
+  };
+  window.addEventListener("action_create_private_glb_avatar", createPrivateGlbAvatar);
+  // Compatibility with bookmarks or extensions that used the original vendor-specific event.
+  window.addEventListener("action_create_avaturn_avatar", createPrivateGlbAvatar);
 
   scene.addEventListener("scene_media_selected", e => {
     const sceneInfo = e.detail;
@@ -1221,7 +1234,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Cookies.remove(OAUTH_FLOW_PERMS_TOKEN_KEY);
   }
   const hubPhxChannel = socket.channel(`hub:${hubId}`, APP.hubChannelParamsForPermsToken(oauthFlowPermsToken));
-  hubChannel.channel = hubPhxChannel;
+  hubChannel.setChannel(hubPhxChannel);
   hubChannel.presence = new Presence(hubPhxChannel);
   const { rawOnJoin, rawOnLeave } = denoisePresence(presenceEventsForHub(events));
   hubChannel.presence.onJoin(rawOnJoin);
@@ -1351,6 +1364,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const permsToken = oauthFlowPermsToken || data.perms_token;
       hubChannel.setPermissionsFromToken(permsToken);
+      hubChannel.configureBotChatCapability(data.bot_chat_capability);
+      hubChannel.configureWaypointReservations(data.waypoint_reservation);
 
       subscriptions.setHubChannel(hubChannel);
       subscriptions.setSubscribed(data.subscriptions.web_push);

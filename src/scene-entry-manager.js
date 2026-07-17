@@ -82,19 +82,24 @@ export default class SceneEntryManager {
       await exit2DInterstitialAndEnterVR(true);
     }
 
-    if (shouldUseNewLoader()) {
-      moveToSpawnPoint(APP.world, this.scene.systems["hubs-systems"].characterController);
-    } else {
-      const waypointSystem = this.scene.systems["hubs-systems"].waypointSystem;
-      waypointSystem.moveToSpawnPoint();
-    }
-
     // Technical runner mode: connect + enter presence, but do not spawn a visible avatar rig.
     // The runner exists solely to authoritatively create/update bot entities.
     if (isBotMode && isBotRunnerMode) {
       this.scene.addState("entered");
       this.hubChannel.sendEnteredEvent();
       return;
+    }
+
+    // Reservation requests are accepted only while entering or after entry.
+    // Phoenix preserves push order, so this always reaches Reticulum before a
+    // spawn-point reservation, including forced-entry paths.
+    this.hubChannel.sendEnteringEvent();
+
+    if (shouldUseNewLoader()) {
+      moveToSpawnPoint(APP.world, this.scene.systems["hubs-systems"].characterController);
+    } else {
+      const waypointSystem = this.scene.systems["hubs-systems"].waypointSystem;
+      waypointSystem.moveToSpawnPoint();
     }
 
     if (isMobile || forceEnableTouchscreen || qsTruthy("force_enable_touchscreen")) {

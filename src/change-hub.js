@@ -60,6 +60,10 @@ export async function changeHub(hubId, addToHistory = true, waypoint = "") {
     return;
   }
 
+  // Phoenix preserves event ordering on the migrated channel. Queue entering
+  // before any cached scene can finish loading and request a spawn-point lease.
+  await APP.hubChannel.sendEnteringEvent();
+
   const hub = data.hubs[0];
 
   if (addToHistory) {

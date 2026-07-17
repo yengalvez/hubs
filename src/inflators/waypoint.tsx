@@ -20,6 +20,7 @@ export interface WaypointParams {
   willDisableTeleporting: boolean;
   willMaintainInitialOrientation: boolean;
   snapToNavMesh: boolean;
+  reservationId?: string;
 }
 
 /**
@@ -51,6 +52,7 @@ export function inflateWaypoint(world: HubsWorld, eid: number, props: WaypointPa
   if (props.willMaintainInitialOrientation) flags |= WaypointFlags.willMaintainInitialOrientation;
   if (props.snapToNavMesh) flags |= WaypointFlags.snapToNavMesh;
   Waypoint.flags[eid] = flags;
+  Waypoint.reservationId[eid] = props.reservationId ? APP.getSid(props.reservationId) : 0;
 
   if (Waypoint.flags[eid] & WaypointFlags.canBeOccupied) {
     addComponent(world, Networked, eid);

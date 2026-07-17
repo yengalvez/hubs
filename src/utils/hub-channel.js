@@ -3,6 +3,8 @@ import { EventTarget } from "event-target-shim";
 import { Presence } from "phoenix";
 import { migrateChannelToSocket, discordBridgesForPresences, migrateToChannel } from "./phoenix-utils";
 import configs from "./configs";
+import { WaypointReservationCoordinator } from "./waypoint-reservation-coordinator";
+import { BotChatCapabilityState } from "./bot-chat-lifecycle";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30;
@@ -45,6 +47,13 @@ export default class HubChannel extends EventTarget {
     this._signedIn = !!this.store.state.credentials.token;
     this._permissions = {};
     this._blockedSessionIds = new Set();
+    this._botChatCapabilityState = new BotChatCapabilityState(detail => {
+      this.dispatchEvent(new CustomEvent("bot_chat_capability_changed", { detail }));
+    });
+    this.waypointReservations = new WaypointReservationCoordinator({
+      onStateChange: detail => this.dispatchEvent(new CustomEvent("waypoint_reservations_changed", { detail })),
+      onReservationLost: detail => this.dispatchEvent(new CustomEvent("waypoint_reservation_lost", { detail }))
+    });
 
     store.addEventListener("profilechanged", this.sendProfileUpdate.bind(this));
   }
@@ -109,6 +118,7 @@ export default class HubChannel extends EventTarget {
     }
 
     this.channel = await migrateChannelToSocket(this.channel, socket, params);
+    this.waypointReservations.setChannel(this.channel);
     this.presence = new Presence(this.channel);
 
     if (presenceBindings) {
@@ -137,10 +147,13 @@ export default class HubChannel extends EventTarget {
     }
 
     this.channel = newChannel;
+    this.waypointReservations.setChannel(this.channel);
     this.presence = new Presence(this.channel);
     this.hubId = data.hubs[0].hub_id;
 
     this.setPermissionsFromToken(data.perms_token);
+    this.configureBotChatCapability(data.bot_chat_capability);
+    this.configureWaypointReservations(data.waypoint_reservation);
 
     if (presenceBindings) {
       this.presence.onJoin(presenceBindings.onJoin);
@@ -148,6 +161,52 @@ export default class HubChannel extends EventTarget {
       this.presence.onSync(presenceBindings.onSync);
     }
     return data;
+  }
+
+  setChannel(channel) {
+    this.channel = channel;
+    this.waypointReservations.setChannel(channel);
+  }
+
+  configureWaypointReservations(capability) {
+    this.waypointReservations.configure(capability);
+  }
+
+  configureBotChatCapability(capability) {
+    this._botChatCapabilityState.configure(capability);
+  }
+
+  get botChatCapability() {
+    return this._botChatCapabilityState.capability;
+  }
+
+  get botChatCapabilityEpoch() {
+    return this._botChatCapabilityState.epoch;
+  }
+
+  /** @returns {Promise<{waypointId: string, reservationId: string, claimId: string} | null>} */
+  reserveWaypoint(waypointId) {
+    return this.waypointReservations.reserveWithHandle(waypointId);
+  }
+
+  /** @param {{waypointId: string, reservationId: string, claimId: string} | null} [expectedReservation] */
+  releaseWaypointReservation(expectedReservation = null) {
+    return this.waypointReservations.release(expectedReservation);
+  }
+
+  isWaypointReserved(waypointId) {
+    return this.waypointReservations.isReserved(waypointId);
+  }
+
+  get currentWaypointReservationId() {
+    return this.waypointReservations.currentWaypointId;
+  }
+
+  // Read-only, local-only bridge for browser acceptance diagnostics. It does
+  // not expose presence ownership, channel credentials or another session's
+  // private reservation identifier.
+  getWaypointReservationDiagnosticStateForTests() {
+    return this.waypointReservations.getDiagnosticState();
   }
 
   setPermissionsFromToken = token => {
@@ -166,10 +225,13 @@ export default class HubChannel extends EventTarget {
   };
 
   sendEnteringEvent = async () => {
+    if (!this.channel || this._enteringEventChannel === this.channel) return;
+    this._enteringEventChannel = this.channel;
     this.channel.push("events:entering", {});
   };
 
   sendEnteringCancelledEvent = async () => {
+    this._enteringEventChannel = null;
     this.channel.push("events:entering_cancelled", {});
   };
 
@@ -207,6 +269,7 @@ export default class HubChannel extends EventTarget {
     };
 
     this.channel.push("events:entered", entryEvent);
+    this._enteringEventChannel = null;
   };
 
   beginStreaming() {
@@ -336,8 +399,9 @@ export default class HubChannel extends EventTarget {
 
       this.channel
         .push("sign_in", { token, creator_assignment_token })
-        .receive("ok", ({ perms_token }) => {
+        .receive("ok", ({ perms_token, bot_chat_capability }) => {
           this.setPermissionsFromToken(perms_token);
+          this.configureBotChatCapability(bot_chat_capability);
           this._signedIn = true;
           resolve();
         })
@@ -358,8 +422,9 @@ export default class HubChannel extends EventTarget {
     return new Promise((resolve, reject) => {
       this.channel
         .push("sign_out")
-        .receive("ok", async () => {
+        .receive("ok", async ({ bot_chat_capability } = {}) => {
           this._signedIn = false;
+          this.configureBotChatCapability(bot_chat_capability);
           const params = this.channel.params();
           delete params.auth_token;
           delete params.perms_token;

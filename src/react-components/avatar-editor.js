@@ -116,7 +116,7 @@ class AvatarEditor extends Component {
     this.inputFiles = {};
   }
 
-  isAvaturnPrivateMode = () => this.props.mode === "avaturn-private";
+  isPrivateGlbMode = () => ["private-glb", "avaturn-private"].includes(this.props.mode);
 
   componentWillUnmount() {
     revokeObjectUrl(this.state.previewGltfUrl);
@@ -130,10 +130,10 @@ class AvatarEditor extends Component {
       avatar.creatorAttribution = (avatar.attributions && avatar.attributions.creator) || "";
       Object.assign(this.inputFiles, avatar.files);
       this.setState({ avatar, previewGltfUrl: avatar.base_gltf_url });
-    } else if (this.isAvaturnPrivateMode()) {
+    } else if (this.isPrivateGlbMode()) {
       this.setState({
         avatar: {
-          name: "Mi avatar Avaturn",
+          name: "Mi avatar GLB",
           files: {},
           allow_promotion: false,
           allow_remixing: false
@@ -176,18 +176,15 @@ class AvatarEditor extends Component {
 
   uploadAvatar = async e => {
     e.preventDefault();
-    const isAvaturnPrivateMode = this.isAvaturnPrivateMode();
+    const isPrivateGlbMode = this.isPrivateGlbMode();
     const localGlb = this.inputFiles.glb instanceof File ? this.inputFiles.glb : null;
 
-    if (isAvaturnPrivateMode && !localGlb) {
+    if (isPrivateGlbMode && !localGlb) {
       this.setState({ uploadError: "Selecciona un archivo .glb antes de guardar." });
       return;
     }
 
-    if (
-      isAvaturnPrivateMode &&
-      (!this.state.previewReady || !this.state.avatarSkeletonMetadata?.hasRequiredUpperBody)
-    ) {
+    if (isPrivateGlbMode && (!this.state.previewReady || !this.state.avatarSkeletonMetadata?.hasRequiredUpperBody)) {
       this.setState({ uploadError: "Espera a que el avatar termine de cargarse y valida su esqueleto." });
       return;
     }
@@ -198,9 +195,7 @@ class AvatarEditor extends Component {
     try {
       if (localGlb) {
         await validateAvatarGlbFile(localGlb);
-        const gltfLoader = new GLTFLoader().register(
-          parser => new GLTFBinarySplitterPlugin(parser, !isAvaturnPrivateMode)
-        );
+        const gltfLoader = new GLTFLoader().register(parser => new GLTFBinarySplitterPlugin(parser, !isPrivateGlbMode));
         gltfUrl = URL.createObjectURL(localGlb);
 
         const parsedGltf = await new Promise((resolve, reject) => {
@@ -217,7 +212,7 @@ class AvatarEditor extends Component {
           );
         });
 
-        if (isAvaturnPrivateMode) {
+        if (isPrivateGlbMode) {
           const skeletonMetadata = getAvatarSkeletonMetadata(parsedGltf.scene);
           if (!skeletonMetadata.hasRequiredUpperBody) {
             throw new Error(this.getInvalidSkeletonMessage(skeletonMetadata));
@@ -235,8 +230,8 @@ class AvatarEditor extends Component {
       const fileUploads = await Promise.all(filesToUpload.map(f => this.inputFiles[f] && upload(this.inputFiles[f])));
       const avatar = {
         ...this.state.avatar,
-        allow_promotion: isAvaturnPrivateMode ? false : this.state.avatar.allow_promotion,
-        allow_remixing: isAvaturnPrivateMode ? false : this.state.avatar.allow_remixing,
+        allow_promotion: isPrivateGlbMode ? false : this.state.avatar.allow_promotion,
+        allow_remixing: isPrivateGlbMode ? false : this.state.avatar.allow_remixing,
         attributions: {
           creator: this.state.avatar.creatorAttribution
         },
@@ -549,7 +544,7 @@ class AvatarEditor extends Component {
     if (useAllowedEditors) {
       editorLinks = editorLinks.filter(e => allowedEditors.some(w => w.name === e.name && w.url === e.url));
     }
-    if (this.isAvaturnPrivateMode()) {
+    if (this.isPrivateGlbMode()) {
       const avatarSkeletonMetadata = getAvatarSkeletonMetadata(gltf.scene);
       if (!avatarSkeletonMetadata.hasRequiredUpperBody) {
         this.setState({
@@ -569,16 +564,16 @@ class AvatarEditor extends Component {
   };
 
   handleGltfLoading = () => {
-    if (!this.isAvaturnPrivateMode()) return;
+    if (!this.isPrivateGlbMode()) return;
     this.setState({ previewReady: false, avatarSkeletonMetadata: null, uploadError: null });
   };
 
   handleGltfLoadError = () => {
-    if (!this.isAvaturnPrivateMode()) return;
+    if (!this.isPrivateGlbMode()) return;
     this.setState({
       previewReady: false,
       avatarSkeletonMetadata: null,
-      uploadError: "No se pudo cargar el GLB. Comprueba que el archivo sea un avatar Avaturn válido."
+      uploadError: "No se pudo cargar el GLB. Comprueba que sea un avatar compatible y no esté dañado."
     });
   };
 
@@ -590,7 +585,7 @@ class AvatarEditor extends Component {
   render() {
     const { debug, intl } = this.props;
     const { avatar } = this.state;
-    const isAvaturnPrivateMode = this.isAvaturnPrivateMode();
+    const isPrivateGlbMode = this.isPrivateGlbMode();
 
     return (
       <div className={classNames(styles.avatarEditor, this.props.className)}>
@@ -607,24 +602,24 @@ class AvatarEditor extends Component {
           </div>
         ) : (
           <form onSubmit={this.uploadAvatar} className="center">
-            {this.textField("name", isAvaturnPrivateMode ? "Nombre del avatar" : "Nombre", false, true)}
-            {isAvaturnPrivateMode && (
+            {this.textField("name", isPrivateGlbMode ? "Nombre del avatar" : "Nombre", false, true)}
+            {isPrivateGlbMode && (
               <p className="mode-info">
                 <FormattedMessage
-                  id="avatar-editor.avaturn-private-info"
-                  defaultMessage="Este avatar se sube como privado para tu cuenta y no se publica en listados destacados."
+                  id="avatar-editor.private-glb-info"
+                  defaultMessage="This avatar is uploaded privately to your account and is not published in featured listings."
                 />
               </p>
             )}
             <div className="split">
               <div className="form-body">
-                {isAvaturnPrivateMode ? (
+                {isPrivateGlbMode ? (
                   <>
                     {this.fileField(
                       "glb",
                       intl.formatMessage({
-                        id: "avatar-editor.field.avaturn-glb",
-                        defaultMessage: "Archivo GLB de Avaturn"
+                        id: "avatar-editor.field.private-glb",
+                        defaultMessage: "Custom GLB file"
                       }),
                       "model/gltf+binary,.glb"
                     )}
@@ -813,7 +808,7 @@ class AvatarEditor extends Component {
                 ref={p => (this.preview = p)}
               />
             </div>
-            {!isAvaturnPrivateMode && (
+            {!isPrivateGlbMode && (
               <div className="info">
                 <IfFeature name="show_avatar_editor_link">
                   <p>
@@ -854,12 +849,12 @@ class AvatarEditor extends Component {
                 </IfFeature>
               </div>
             )}
-            {!isAvaturnPrivateMode && this.state.uploadError && <p className="error-text">{this.state.uploadError}</p>}
+            {!isPrivateGlbMode && this.state.uploadError && <p className="error-text">{this.state.uploadError}</p>}
             <div>
               <button
                 disabled={
                   this.state.uploading ||
-                  (isAvaturnPrivateMode &&
+                  (isPrivateGlbMode &&
                     (!this.inputFiles.glb ||
                       !this.state.previewReady ||
                       !this.state.avatarSkeletonMetadata?.hasRequiredUpperBody))
@@ -874,7 +869,7 @@ class AvatarEditor extends Component {
                 )}
               </button>
             </div>
-            {!this.props.hideDelete && !isAvaturnPrivateMode && (
+            {!this.props.hideDelete && !isPrivateGlbMode && (
               <div className="delete-avatar">
                 {this.state.confirmDelete ? (
                   <span>

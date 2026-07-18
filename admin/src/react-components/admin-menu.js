@@ -15,6 +15,7 @@ import LibraryBooksIcon from "@material-ui/icons/LibraryBooks";
 import BackupIcon from "@material-ui/icons/Backup";
 import ViewIcon from "@material-ui/icons/ViewList";
 import SettingsIcon from "@material-ui/icons/Settings";
+import VerifiedUserIcon from "@material-ui/icons/VerifiedUser";
 import Collapse from "@material-ui/core/Collapse";
 import { getServiceDisplayName } from "../utils/ita";
 import configs from "../utils/configs";
@@ -125,6 +126,22 @@ class Menu extends Component {
       >
         {icon && <ListItemIcon className={this.props.classes.icon}>{icon}</ListItemIcon>}
         <ListItemText className={this.props.classes.text} primary={getResourceDisplayName(resource)} />
+      </ListItem>
+    );
+  }
+
+  renderBotApprovalLink() {
+    return (
+      <ListItem
+        className={classNames(this.props.classes.item, this.props.classes.nested)}
+        component={NavLink}
+        key="bot-config-approvals"
+        to="/bot-config-approvals"
+      >
+        <ListItemIcon className={this.props.classes.icon}>
+          <VerifiedUserIcon />
+        </ListItemIcon>
+        <ListItemText className={this.props.classes.text} primary="Aprobaciones de bots" />
       </ListItem>
     );
   }
@@ -251,6 +268,7 @@ class Menu extends Component {
                 </ListItemIcon>
                 <ListItemText className={this.props.classes.text} primary="App Settings" />
               </ListItem>
+              {this.renderBotApprovalLink()}
 
               {hasPaidFeature() && !isBrandingDisabled() && (
                 <>
@@ -344,6 +362,7 @@ class Menu extends Component {
                 </ListItemIcon>
                 <ListItemText className={this.props.classes.text} primary="App Settings" />
               </ListItem>
+              {this.renderBotApprovalLink()}
 
               <ListItem
                 className={classNames(this.props.classes.item, this.props.classes.nested)}

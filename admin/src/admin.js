@@ -32,6 +32,7 @@ import { ServiceEditor, AppConfigEditor } from "./react-components/service-edito
 import { ServerAccess } from "./react-components/server-access";
 import { ContentCDN } from "./react-components/content-cdn";
 import { ImportContent } from "./react-components/import-content";
+import { BotConfigApprovals } from "./react-components/bot-config-approvals";
 import { AutoEndSessionDialog } from "./react-components/auto-end-session-dialog";
 import registerTelemetry from "hubs/src/telemetry";
 import { UnauthorizedPage } from "./react-components/unauthorized";
@@ -250,8 +251,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const importRoute = <Route exact path="/import" component={ImportContent} />;
   const accessRoute = <Route exact path="/server-access" component={ServerAccess} />;
   const cdnRoute = <Route exact path="/content-cdn" component={ContentCDN} />;
+  const botConfigApprovalsRoute = <Route exact path="/bot-config-approvals" component={BotConfigApprovals} />;
 
-  const customRoutes = [homeRoute, importRoute, accessRoute, cdnRoute];
+  const customRoutes = [homeRoute, importRoute, accessRoute, cdnRoute, botConfigApprovalsRoute];
 
   try {
     const appConfigSchema = schemaByCategories({

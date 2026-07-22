@@ -14,6 +14,7 @@
   },
   "scripts": {
     "info": "npm-scripts-info",
+    "postinstall": "node ./scripts/patch-draft-js-immutable-4.js",
     "dependencies": "git config --local core.hooksPath .githooks/ || true",
     "start": "webpack serve --mode=development --env loadAppConfig=1",
     "dev": "webpack serve --mode=development --env remoteDev=1 --progress",
@@ -237,16 +238,16 @@
   },
   "overrides": {
     "@draft-js-plugins/editor": {
-      "immutable": "3.8.3"
+      "immutable": "4.3.9"
     },
     "@draft-js-plugins/emoji": {
-      "immutable": "3.8.3"
+      "immutable": "4.3.9"
     },
     "aframe": {
       "debug": "2.6.9"
     },
     "draft-js": {
-      "immutable": "3.8.3"
+      "immutable": "4.3.9"
     },
     "lodash": "4.18.1",
     "lodash-es": "4.18.1",

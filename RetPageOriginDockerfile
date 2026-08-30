@@ -17,6 +17,9 @@ run apt update && apt -y install wget && \
 run mkdir -p /hubs/admin/ && cd /hubs
 copy package.json ./
 copy package-lock.json ./
+# npm ci runs the repository postinstall, which needs this script before the
+# later full-source COPY layer.
+copy scripts/patch-draft-js-immutable-4.js ./scripts/
 run npm ci
 copy admin/package.json admin/
 copy admin/package-lock.json admin/

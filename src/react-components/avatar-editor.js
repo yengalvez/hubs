@@ -114,11 +114,13 @@ class AvatarEditor extends Component {
   constructor(props) {
     super(props);
     this.inputFiles = {};
+    this.glbSelectionId = 0;
   }
 
   isPrivateGlbMode = () => ["private-glb", "avaturn-private"].includes(this.props.mode);
 
   componentWillUnmount() {
+    this.glbSelectionId++;
     revokeObjectUrl(this.state.previewGltfUrl);
     const files = (this.state.avatar && this.state.avatar.files) || {};
     Object.values(files).forEach(revokeObjectUrl);
@@ -280,12 +282,31 @@ class AvatarEditor extends Component {
           e.target.value = null;
           if (!file) return;
 
+          const privateGlb = name === "glb" && this.isPrivateGlbMode();
+          const selectionId = privateGlb ? ++this.glbSelectionId : null;
+          if (privateGlb) {
+            // Invalidate the previous file before the asynchronous header read.
+            // A rejected replacement must never submit the old selection.
+            this.inputFiles.glb = null;
+            revokeObjectUrl(this.state.previewGltfUrl);
+            revokeObjectUrl(this.state.avatar.files.glb);
+            this.setState(({ avatar }) => ({
+              previewReady: false,
+              avatarSkeletonMetadata: null,
+              previewGltfUrl: null,
+              uploadError: null,
+              avatar: { ...avatar, files: { ...avatar.files, glb: null } }
+            }));
+          }
+
           try {
             if (name === "glb") await validateAvatarGlbFile(file);
           } catch (error) {
+            if (privateGlb && selectionId !== this.glbSelectionId) return;
             this.setState({ uploadError: error.message });
             return;
           }
+          if (privateGlb && selectionId !== this.glbSelectionId) return;
 
           revokeObjectUrl(this.state.previewGltfUrl);
           revokeObjectUrl(this.state.avatar.files[name]);
@@ -309,6 +330,7 @@ class AvatarEditor extends Component {
       {this.state.avatar.files[name] && (
         <a
           onClick={() => {
+            if (name === "glb" && this.isPrivateGlbMode()) this.glbSelectionId++;
             this.inputFiles[name] = null;
             revokeObjectUrl(this.state.avatar.files[name]);
             this.setState(
@@ -621,7 +643,8 @@ class AvatarEditor extends Component {
                         id: "avatar-editor.field.private-glb",
                         defaultMessage: "Custom GLB file"
                       }),
-                      "model/gltf+binary,.glb"
+                      "model/gltf+binary,.glb",
+                      this.state.uploading
                     )}
                     {this.state.uploadError && <p className="error-text">{this.state.uploadError}</p>}
                   </>

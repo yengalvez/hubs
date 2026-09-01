@@ -10,6 +10,7 @@ import { createDefaultEnvironmentMap } from "../components/environment-map";
 import { loadGLTF } from "../components/gltf-model-plus";
 import { disposeNode, findNode } from "../utils/three-utils";
 import { ensureAvatarMaterial, MAT_NAME } from "../utils/avatar-utils";
+import { fitAvatarPreviewCamera, getAvatarPreviewBounds } from "../utils/avatar-preview-bounds";
 import { createImageBitmap, disposeImageBitmap } from "../utils/image-bitmap-utils";
 import { proxiedUrlFor } from "../utils/media-url-utils";
 import styles from "../assets/stylesheets/avatar-preview.scss";
@@ -53,16 +54,6 @@ const createImageBitmapFromURL = url =>
     .then(createImageBitmap);
 
 const ORBIT_ANGLE = new THREE.Euler(-30 * THREE.MathUtils.DEG2RAD, 30 * THREE.MathUtils.DEG2RAD, 0);
-const DEFAULT_MARGIN = 1;
-
-function fitBoxInFrustum(camera, box, center, margin = DEFAULT_MARGIN) {
-  const halfYExtents = Math.max(box.max.y - center.y, center.y - box.min.y);
-  const halfVertFOV = THREE.MathUtils.degToRad(camera.fov / 2);
-  camera.position.set(0, 0, (halfYExtents / Math.tan(halfVertFOV) + box.max.z) * margin);
-  camera.position.applyEuler(ORBIT_ANGLE);
-  camera.position.add(center);
-  camera.lookAt(center);
-}
 
 function getThemeBackground() {
   return new THREE.Color(getThemeColor("background3-color") || 0xeaeaea);
@@ -153,14 +144,14 @@ class AvatarPreview extends Component {
     const box = new THREE.Box3();
     const center = new THREE.Vector3();
     return () => {
-      box.setFromObject(this.avatar);
+      getAvatarPreviewBounds(this.avatar, box);
       box.getCenter(center);
 
       // Shift the center vertically in order to frame the avatar nicely.
       center.y = (box.max.y - box.min.y) * 0.6 + box.min.y;
 
-      fitBoxInFrustum(this.camera, box, center);
-      fitBoxInFrustum(this.snapshotCamera, box, center, 0.7);
+      fitAvatarPreviewCamera(this.camera, box, center, ORBIT_ANGLE);
+      fitAvatarPreviewCamera(this.snapshotCamera, box, center, ORBIT_ANGLE);
 
       this.controls.target.copy(center);
       this.controls.update();

@@ -1,22 +1,48 @@
 # Avatar creator assets
 
-Models by Quaternius, released under CC0 1.0 Universal:
+Business avatar templates assembled from MakeHuman assets, obtained 2026-09-05.
+The former Quaternius fantasy prototype is superseded and is not included in
+these templates. No Avaturn, RPM, Mozilla Hackweek or M3 assets are included.
+
+## Sources and authors
+
+- MakeHuman Team: base human, Mixamo-compatible rig, skin, shoes01, low-poly eyes,
+  eyebrow001, short01, short02, bob01, ponytail01, afro01. CC0 1.0.
+  https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html
+- Margaret Toigo (MRT): male suit tie and jacket, male double-breasted suit,
+  fisherman sweater, basic tucked T-shirt, wool pants. CC0 1.0.
+  https://static.makehumancommunity.org/assets/assetpacks/suits01.html
+  https://static.makehumancommunity.org/assets/assetpacks/shirts01.html
+  https://static.makehumancommunity.org/assets/assetpacks/pants01.html
+- Namuhekam: male polo shirt. CC0 1.0.
+  https://static.makehumancommunity.org/assets/assetpacks/shirts01.html
+- Mindfront: male trousers 1 and 2. CC BY 4.0 (embedded source MHCLO headers).
+- punkduck: male classic jeans. CC BY 4.0 (embedded source MHCLO header).
+  https://static.makehumancommunity.org/assets/assetpacks/pants02.html
+
+License links:
 https://creativecommons.org/publicdomain/zero/1.0/
+https://creativecommons.org/licenses/by/4.0/
+Retain the attribution and modification notice for CC-BY assets when distributing
+avatars. The creator displays credits and retains them in glTF asset metadata.
 
-Original free Standard downloads (not the paid Source editions):
+## Modifications and build status
 
-- Universal Base Characters: https://quaternius.itch.io/universal-base-characters
-  ZIP SHA256 fdbf1804c90dfc1ea03e992bff7da2dfd1a79318e13270a660180f9308455f40
-- Modular Character Outfits - Fantasy: https://quaternius.itch.io/modular-character-outfits-fantasy
-  ZIP SHA256 c3468b18871cc8c8f05ab14df7712baf22cb9f389cbd870babf130e595187f70
+Fitted to two bodies, rigged, jackets separated from trousers, sweater clearance
+and T-shirt hem adjusted, textures reduced to 512/1024 px, body occlusion prepared
+per outfit combination, material transparency normalized, converted to GLB.
+Five tops, five trousers, five hairstyles plus bald; independent selections.
+Only selected resources are retained in each saved avatar.
 
-Both archives include License_Standard.txt explicitly dedicating the models to CC0.
-Obtained 2026-09-05 (Europe/Madrid). Commercial use and adaptation permitted.
-No assets from Avaturn, RPM, Mozilla Hackweek or M3 CharacterStudio are included.
-
-YenHubs adaptations: two head/body types, five hairstyles plus bald, two outfits;
-shared skeleton with normalized bone names, head crop at the clothing neckline,
-textures resized to 1024px, optional normal maps removed, no animations or cameras.
-Rebuild using scripts/build-avatar-creator-assets.py with Blender 4.4.1 and the
-extracted Standard directories. The templates contain all curated choices; the
-creator removes unselected mesh references and changes hair colour locally.
+MPFB v2.0.17 is an offline GPL build tool; its asset/output license is CC0, not
+the code license. The application does not include MPFB Python code at runtime.
+Portable assembly: scripts/build-business-avatar-assets.py (usage in its header).
+Supply the pinned MPFB source directory, the extracted official asset packs and
+a private output directory. Run once for each body (`--female` for the second).
+Then use scripts/normalize-business-avatar.mjs to produce the checked-in GLBs.
+The portable build was verified against its normalized output. Current templates
+include the final lower-torso sweater clearance adjustment:
+- Male SHA256 4b36b089b9dc5e6444f1a4d9e8e42d2aeef0440d9ee35e403fc3683b68c410d5
+- Female SHA256 8bc11c691afdd8690c9bf6d490ac0873eec0708eec476b24fd37d7a87e8860f6
+Do not use the superseded Quaternius build-avatar-creator-assets.py to rebuild
+these MakeHuman templates.

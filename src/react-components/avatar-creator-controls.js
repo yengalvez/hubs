@@ -69,15 +69,25 @@ export default function AvatarCreatorControls({ onGenerate, onLoading, onError, 
       ])}
       {select("hair", "Peinado", [
         ["none", "Sin pelo"],
-        ["simpleparted", "Raya lateral"],
-        ["buzzed", "Corto"],
-        ["buzzedfemale", "Corto lateral"],
-        ["buns", "Recogido"],
-        ["long", "Largo"]
+        ["short01", "Corto con raya"],
+        ["short02", "Corto natural"],
+        ["bob01", "Media melena"],
+        ["ponytail01", "Coleta"],
+        ["afro01", "Afro"]
       ])}
-      {select("outfit", "Ropa", [
-        ["peasant", "Túnica"],
-        ["ranger", "Explorador"]
+      {select("top", "Prenda superior", [
+        ["polo", "Polo"],
+        ["blazer", "Americana y corbata"],
+        ["doublebreasted", "Chaqueta cruzada"],
+        ["sweater", "Jersey"],
+        ["tshirt", "Camiseta"]
+      ])}
+      {select("bottom", "Pantalones", [
+        ["suit", "Traje"],
+        ["denim", "Denim entallado"],
+        ["chinos", "Corte recto"],
+        ["jeans", "Vaqueros clásicos"],
+        ["wool", "Lana"]
       ])}
       <label>
         <FormattedMessage id="avatar-creator.hair-color" defaultMessage="Color del pelo" />{" "}
@@ -92,8 +102,19 @@ export default function AvatarCreatorControls({ onGenerate, onLoading, onError, 
         <small>
           <FormattedMessage
             id="avatar-creator.credit"
-            defaultMessage="Modelos de Quaternius · CC0. Adaptados para YenHubs."
-          />
+            defaultMessage="MakeHuman, Margaret Toigo y Namuhekam · CC0. Pantalones de Mindfront y punkduck · CC BY 4.0. Adaptados para YenHubs."
+          />{" "}
+          <a
+            href="https://static.makehumancommunity.org/assets/assetpacks.html"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Fuentes
+          </a>
+          {" · "}
+          <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">
+            Licencia CC BY 4.0
+          </a>
         </small>
       </p>
     </fieldset>

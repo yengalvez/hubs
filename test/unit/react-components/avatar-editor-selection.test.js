@@ -56,6 +56,7 @@ class PreviewStub extends React.Component {
 }
 
 const stubs = {
+  "./avatar-creator-controls": () => null,
   "../utils/configs": {},
   "./if-feature": () => null,
   "../utils/phoenix-utils": {
@@ -310,5 +311,51 @@ test.serial("the private file picker is disabled during an upload", async t => {
   const h = await mount(t);
   await act(async () => h.editor.setState({ uploading: true }));
   t.true(document.querySelector('input[type="file"]').disabled);
+  t.true(h.save.disabled);
+});
+
+test.serial("creator replacement invalidates the old file before generation and saves privately", async t => {
+  const h = await mount(t, "creator");
+  await act(async () => h.editor.acceptCreatorFile(headerFile("old.glb")));
+  await h.ready();
+  t.false(h.save.disabled);
+  await act(async () => h.editor.invalidateCreatorFile());
+  t.true(h.save.disabled);
+  await h.submit();
+  t.is(uploadedFiles.length, 0);
+  const generated = headerFile("generated.glb");
+  await act(async () => h.editor.acceptCreatorFile(generated));
+  await h.ready();
+  await h.submit();
+  t.deepEqual(parsedFiles, [generated]);
+  t.false(savedAvatars[0].allow_promotion);
+  t.false(savedAvatars[0].allow_remixing);
+});
+
+test.serial("creator ignores a late header after newer generation starts", async t => {
+  const h = await mount(t, "creator");
+  const pending = await deferredHeaderFile();
+  let work;
+  await act(async () => {
+    work = h.editor.acceptCreatorFile(pending.file);
+  });
+  await act(async () => h.editor.invalidateCreatorFile());
+  const newest = headerFile("latest.glb");
+  await act(async () => h.editor.acceptCreatorFile(newest));
+  await finishHeader(pending);
+  await work;
+  t.is(h.editor.inputFiles.glb, newest);
+  t.is(savedAvatars.length, 0);
+});
+
+test.serial("creator failure cannot submit its previous selection", async t => {
+  const h = await mount(t, "creator");
+  await act(async () => h.editor.acceptCreatorFile(headerFile()));
+  await h.ready();
+  await act(async () => h.editor.invalidateCreatorFile());
+  await act(async () => h.editor.handleCreatorError("Plantilla no disponible"));
+  await h.submit();
+  t.is(uploadedFiles.length, 0);
+  t.is(savedAvatars.length, 0);
   t.true(h.save.disabled);
 });

@@ -15,6 +15,7 @@ import { validateAvatarGlbFile } from "../utils/avatar-glb-utils";
 import { getAvatarSkeletonMetadata } from "../utils/avatar-skeleton-utils";
 
 import AvatarPreview from "./avatar-preview";
+import AvatarCreatorControls from "./avatar-creator-controls";
 import styles from "../assets/stylesheets/avatar-editor.scss";
 
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
@@ -117,7 +118,40 @@ class AvatarEditor extends Component {
     this.glbSelectionId = 0;
   }
 
-  isPrivateGlbMode = () => ["private-glb", "avaturn-private"].includes(this.props.mode);
+  isPrivateGlbMode = () => ["private-glb", "avaturn-private", "creator"].includes(this.props.mode);
+
+  invalidateCreatorFile = () => {
+    ++this.glbSelectionId;
+    this.inputFiles.glb = null;
+    revokeObjectUrl(this.state.previewGltfUrl);
+    this.setState(({ avatar }) => ({
+      previewGltfUrl: null,
+      previewReady: false,
+      avatarSkeletonMetadata: null,
+      uploadError: null,
+      avatar: { ...avatar, files: { ...avatar.files, glb: null } }
+    }));
+  };
+
+  handleCreatorError = message => this.setState({ uploadError: message });
+
+  acceptCreatorFile = async file => {
+    const selectionId = this.glbSelectionId;
+    try {
+      await validateAvatarGlbFile(file);
+      if (selectionId !== this.glbSelectionId) return;
+      const url = URL.createObjectURL(file);
+      this.inputFiles.glb = file;
+      this.setState(({ avatar }) => ({
+        previewGltfUrl: url,
+        previewReady: false,
+        uploadError: null,
+        avatar: { ...avatar, files: { ...avatar.files, glb: url } }
+      }));
+    } catch (error) {
+      if (selectionId === this.glbSelectionId) this.handleCreatorError(error.message);
+    }
+  };
 
   componentWillUnmount() {
     this.glbSelectionId++;
@@ -610,7 +644,11 @@ class AvatarEditor extends Component {
     const isPrivateGlbMode = this.isPrivateGlbMode();
 
     return (
-      <div className={classNames(styles.avatarEditor, this.props.className)}>
+      <div
+        className={classNames(styles.avatarEditor, this.props.className, {
+          "creator-mode": this.props.mode === "creator"
+        })}
+      >
         {this.props.onClose && (
           <a className="close-button" onClick={this.props.onClose}>
             <i>
@@ -637,14 +675,23 @@ class AvatarEditor extends Component {
               <div className="form-body">
                 {isPrivateGlbMode ? (
                   <>
-                    {this.fileField(
-                      "glb",
-                      intl.formatMessage({
-                        id: "avatar-editor.field.private-glb",
-                        defaultMessage: "Custom GLB file"
-                      }),
-                      "model/gltf+binary,.glb",
-                      this.state.uploading
+                    {this.props.mode === "creator" ? (
+                      <AvatarCreatorControls
+                        onGenerate={this.acceptCreatorFile}
+                        onLoading={this.invalidateCreatorFile}
+                        onError={this.handleCreatorError}
+                        disabled={this.state.uploading}
+                      />
+                    ) : (
+                      this.fileField(
+                        "glb",
+                        intl.formatMessage({
+                          id: "avatar-editor.field.private-glb",
+                          defaultMessage: "Custom GLB file"
+                        }),
+                        "model/gltf+binary,.glb",
+                        this.state.uploading
+                      )
                     )}
                     {this.state.uploadError && <p className="error-text">{this.state.uploadError}</p>}
                   </>

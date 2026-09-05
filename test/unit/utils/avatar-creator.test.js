@@ -46,6 +46,11 @@ for (const body of CREATOR_BODIES) {
             )
           );
           t.deepEqual(json.asset.extras.options, options);
+          t.is(json.asset.extras.creatorNeutralHair, 1);
+          t.is(
+            json.nodes.find(n => /^(mixamorig[:_-]?)?Hips$/i.test(n.name || "")).extras.yenhubsCreatorRig,
+            "makehuman-mixamo-v1"
+          );
           t.false((json.images || []).some(i => i.uri));
           t.false((json.buffers || []).some(b => b.uri));
           t.true(bytes.byteLength < template.byteLength / 2);

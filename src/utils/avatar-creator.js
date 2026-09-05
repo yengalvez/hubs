@@ -47,6 +47,9 @@ export function composeAvatar(template, options) {
     if (group !== "hair_none" && !present.has(group)) throw new Error("Falta una pieza del avatar.");
   }
   for (const node of json.nodes) {
+    if (/^(mixamorig[:_-]?)?Hips$/i.test(node.name || "")) {
+      node.extras = { ...node.extras, yenhubsCreatorRig: "makehuman-mixamo-v1" };
+    }
     const group = node.extras && node.extras.creator_group;
     if (group && !selected.has(group)) {
       delete node.mesh;

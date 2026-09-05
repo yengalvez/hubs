@@ -1,4 +1,13 @@
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { alignAvatarArmReference, captureAvatarBind, retargetAvatarClip } from "./avatar-animation-retarget";
+
+const clipBinds = new WeakMap();
+
+export function adaptSharedClipToCreator(clip, targetBind) {
+  const sourceBind = clipBinds.get(clip);
+  if (!sourceBind) throw new Error("Missing source animation bind pose");
+  return retargetAvatarClip(clip, sourceBind, alignAvatarArmReference(sourceBind, targetBind));
+}
 
 import idleGlbUrl from "../assets/animations/mixamo/idle.glb";
 import walkGlbUrl from "../assets/animations/mixamo/walk.glb";
@@ -60,6 +69,7 @@ function loadFirstClip(url, expectedName) {
           reject(new Error(`[mixamo-shared-animations] No animation clips in ${expectedName} (${url})`));
           return;
         }
+        clipBinds.set(clip, captureAvatarBind(gltf.scene));
         resolve(clip);
       },
       undefined,
@@ -113,6 +123,7 @@ function filterAndRetargetClip(clip, allowedBones, opts = {}) {
   }
 
   const out = new THREE.AnimationClip(clip.name, clip.duration, tracks);
+  clipBinds.set(out, clipBinds.get(clip));
   out.optimize();
   return out;
 }

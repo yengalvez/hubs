@@ -98,6 +98,21 @@ export default function AvatarCreatorControls({ onGenerate, onLoading, onError, 
           onChange={e => setOptions({ ...options, hairColor: e.target.value })}
         />
       </label>
+      <div
+        role="group"
+        aria-label={intl.formatMessage({ id: "avatar-creator.hair-tones", defaultMessage: "Tonos de pelo" })}
+      >
+        {[
+          ["#211b18", "Negro"],
+          ["#493326", "Castaño"],
+          ["#f3d99b", "Rubio claro"],
+          ["#eeeeee", "Canoso"]
+        ].map(([hairColor, label]) => (
+          <button key={hairColor} type="button" onClick={() => setOptions({ ...options, hairColor })}>
+            {label}
+          </button>
+        ))}
+      </div>
       <p>
         <small>
           <FormattedMessage

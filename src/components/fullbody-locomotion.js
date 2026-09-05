@@ -12,7 +12,8 @@
  * - Only touches lower-body bones.
  */
 
-import { getSharedMixamoLocomotionClips } from "../utils/mixamo-shared-animations";
+import { getSharedMixamoLocomotionClips, adaptSharedClipToCreator } from "../utils/mixamo-shared-animations";
+import { captureAvatarBind } from "../utils/avatar-animation-retarget";
 
 const { Vector3, MathUtils } = THREE;
 
@@ -101,11 +102,23 @@ AFRAME.registerComponent("fullbody-locomotion", {
 
   async setupSharedAnimations() {
     try {
-      const { idle, walk, walkBack, strafeLeft, strafeRight, sit } = await getSharedMixamoLocomotionClips();
-      if (this._destroyed) return;
-
       const root = this.el.object3D;
       if (!root) return;
+      const creatorHips = root.getObjectByName("Hips");
+      // Capture before the asynchronous load: fallback ticks can otherwise
+      // change the legs and contaminate the supposed rest-pose reference.
+      const targetBind =
+        creatorHips && creatorHips.userData.yenhubsCreatorRig === "makehuman-mixamo-v1"
+          ? captureAvatarBind(root)
+          : null;
+      let { idle, walk, walkBack, strafeLeft, strafeRight, sit } = await getSharedMixamoLocomotionClips();
+      if (this._destroyed) return;
+
+      if (targetBind) {
+        [idle, walk, walkBack, strafeLeft, strafeRight, sit] = [idle, walk, walkBack, strafeLeft, strafeRight, sit].map(
+          clip => adaptSharedClipToCreator(clip, targetBind)
+        );
+      }
 
       // Mixamo exports "Hips.position" in centimeters-like units (e.g. ~103 at standing height).
       // Applying that translation verbatim to arbitrary RPM/Mixamo avatars can shove the skeleton far away,

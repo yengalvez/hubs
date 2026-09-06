@@ -876,7 +876,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("action_create_avatar", () => {
     performConditionalSignIn(
       () => hubChannel.signedIn,
-      () => pushHistoryState(history, "overlay", "avatar-editor"),
+      () => pushHistoryState(history, "overlay", "avatar-editor", { mode: "creator" }),
       SignInMessages.createAvatar
     );
   });

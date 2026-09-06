@@ -49,7 +49,7 @@ body.vr-mode {
   right: 0;
   top: 0;
   bottom: 0;
-  background: theme.$background1-color;
+  background: var(--mv-surface-solid, #0b162a);
   // The media browser remains mounted behind this editor at the fullscreen
   // layer. Keep the editor above it, but below popovers and modal dialogs.
   z-index: calc(var(--mv-z-fullscreen) + 1);

@@ -1,5 +1,13 @@
 import { Quaternion, Vector3 } from "three";
 
+export function isCreatorAvatar(root) {
+  let marked = false;
+  root.traverse(node => {
+    if (node.userData?.yenhubsCreatorRig === "makehuman-mixamo-v1") marked = true;
+  });
+  return marked;
+}
+
 export function captureAvatarBind(root) {
   root.updateMatrixWorld(true);
   const inverseRoot = root.getWorldQuaternion(new Quaternion()).invert();
@@ -9,6 +17,11 @@ export function captureAvatarBind(root) {
     // skeleton nodes as Object3D rather than Bone. Keep named transforms too.
     if (!node.name) return;
     const name = node.name.replace(/^.*[|:]/, "").replace(/^mixamorig[_-]?/i, "");
+    // Hubs inflation moves a joint's local transform onto a same-named Group,
+    // leaving the original Bone (and its extras) at identity beneath it.
+    // PropertyBinding animates the first match: capture that same transform,
+    // not the later identity child whose parent is the joint itself.
+    if (bones.has(name)) return;
     const world = node.getWorldQuaternion(new Quaternion()).premultiply(inverseRoot);
     const parentWorld = node.parent
       ? node.parent.getWorldQuaternion(new Quaternion()).premultiply(inverseRoot)
@@ -23,11 +36,11 @@ export function captureAvatarBind(root) {
 
 // Match the reference limb directions as well as the joint axes. Otherwise
 // applying a T-pose clip to an A-pose mesh lowers the arms twice.
+// Clavicle slope is anatomy, not arm reference pose: do not flatten shoulders.
 export function alignAvatarArmReference(sourceBind, targetBind) {
   const aligned = new Map(Array.from(targetBind, ([name, value]) => [name, { ...value, world: value.world.clone() }]));
   for (const side of ["Left", "Right"]) {
     for (const [bone, child] of [
-      ["Shoulder", "Arm"],
       ["Arm", "ForeArm"],
       ["ForeArm", "Hand"]
     ]) {

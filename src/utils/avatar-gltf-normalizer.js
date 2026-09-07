@@ -1,3 +1,5 @@
+import { normalizeCreatorHeight } from "./avatar-creator-height";
+
 // Shared GLTF JSON preprocessor for avatar models (player avatars + bot avatars).
 //
 // Hubs attaches templates/IK/locomotion by matching node names (AvatarRoot, Hips, LeftUpLeg, ...).
@@ -113,6 +115,7 @@ export function ensureAvatarNodes(json) {
   // Hubs avatar functionality (templates, IK, locomotion) keys off node names like
   // "AvatarRoot", "Spine", "LeftHand", etc.
   normalizeHumanoidNodeNames();
+  normalizeCreatorHeight(json);
 
   if (!nodes.some(node => node.name === "AvatarRoot")) {
     // Note: We assume that the first node in the primary scene is the one we care about.

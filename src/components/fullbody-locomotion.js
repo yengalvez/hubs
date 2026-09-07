@@ -13,7 +13,8 @@
  */
 
 import { getSharedMixamoLocomotionClips, adaptSharedClipToCreator } from "../utils/mixamo-shared-animations";
-import { captureAvatarBind } from "../utils/avatar-animation-retarget";
+import { captureAvatarBind, isCreatorAvatar } from "../utils/avatar-animation-retarget";
+import { fitCreatorJackets } from "../utils/avatar-creator-garment-fit";
 
 const { Vector3, MathUtils } = THREE;
 
@@ -104,13 +105,10 @@ AFRAME.registerComponent("fullbody-locomotion", {
     try {
       const root = this.el.object3D;
       if (!root) return;
-      const creatorHips = root.getObjectByName("Hips");
       // Capture before the asynchronous load: fallback ticks can otherwise
       // change the legs and contaminate the supposed rest-pose reference.
-      const targetBind =
-        creatorHips && creatorHips.userData.yenhubsCreatorRig === "makehuman-mixamo-v1"
-          ? captureAvatarBind(root)
-          : null;
+      const targetBind = isCreatorAvatar(root) ? captureAvatarBind(root) : null;
+      if (targetBind) fitCreatorJackets(root);
       let { idle, walk, walkBack, strafeLeft, strafeRight, sit } = await getSharedMixamoLocomotionClips();
       if (this._destroyed) return;
 

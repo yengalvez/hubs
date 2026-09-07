@@ -1,6 +1,7 @@
 import { defineQuery } from "bitecs";
 import { CameraTool } from "../bit-components";
 import { waitForDOMContentLoaded } from "../utils/async-utils";
+import { isCreatorAvatar } from "../utils/avatar-animation-retarget";
 const { Vector3, Quaternion, Matrix4, Euler } = THREE;
 
 function quaternionAlmostEquals(epsilon, u, v) {
@@ -191,8 +192,15 @@ AFRAME.registerComponent("ik-controller", {
       !!this.el.object3D.getObjectByName("RightForeArm");
     this._useSimpleHandIK = !hasArmChain;
 
-    const hasInjectedLeftEye = !!(this.leftEye && this.leftEye.userData && this.leftEye.userData.hubsInjectedEye);
-    const hasInjectedRightEye = !!(this.rightEye && this.rightEye.userData && this.rightEye.userData.hubsInjectedEye);
+    const creator = isCreatorAvatar(this.avatar);
+    const injectedEye = node =>
+      !!(
+        node &&
+        (node.userData?.hubsInjectedEye ||
+          (creator && node.children.some(child => child.name === node.name && child.userData?.hubsInjectedEye)))
+      );
+    const hasInjectedLeftEye = injectedEye(this.leftEye);
+    const hasInjectedRightEye = injectedEye(this.rightEye);
     this._hasInjectedEyes = hasInjectedLeftEye || hasInjectedRightEye;
 
     // Set middleEye's position to be right in the middle of the left and right eyes.

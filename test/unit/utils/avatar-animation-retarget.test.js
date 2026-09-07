@@ -1,14 +1,55 @@
 import test from "ava";
-import { Object3D, Quaternion, QuaternionKeyframeTrack, Vector3 } from "three";
+import { Bone, Group, Object3D, Quaternion, QuaternionKeyframeTrack, Vector3 } from "three";
 import {
   alignAvatarArmReference,
   captureAvatarBind,
+  isCreatorAvatar,
   retargetQuaternionTrack
 } from "../../../src/utils/avatar-animation-retarget";
 
 const rotation = (axis, angle) => new Quaternion().setFromAxisAngle(new Vector3(...axis), angle);
 const bind = (parentWorld, local) => ({ parentWorld, world: parentWorld.clone().multiply(local) });
 const near = (t, actual, expected) => t.true(actual.angleTo(expected) < 0.001);
+
+test("inflated Hubs joints keep the first animation target and find original rig extras", t => {
+  const root = new Group();
+  const hips = new Group();
+  hips.name = "Hips";
+  hips.quaternion.copy(rotation([1, 0, 0], 0.6));
+  hips.position.y = 1;
+  const original = new Bone();
+  original.name = "Hips";
+  original.userData.yenhubsCreatorRig = "makehuman-mixamo-v1";
+  root.add(hips);
+  hips.add(original);
+  const captured = captureAvatarBind(root).get("Hips");
+  t.true(isCreatorAvatar(root));
+  near(t, captured.world, hips.quaternion);
+  near(t, captured.parentWorld, new Quaternion());
+  t.not(captured.parentName, "Hips");
+  delete original.userData.yenhubsCreatorRig;
+  t.false(isCreatorAvatar(root));
+});
+
+test("arm reference preserves anatomical clavicle slope", t => {
+  const makeShoulder = angle => {
+    const root = new Group();
+    const shoulder = new Bone();
+    shoulder.name = "LeftShoulder";
+    shoulder.quaternion.copy(rotation([0, 0, 1], angle));
+    const arm = new Bone();
+    arm.name = "LeftArm";
+    arm.position.x = 1;
+    root.add(shoulder);
+    shoulder.add(arm);
+    return captureAvatarBind(root);
+  };
+  const source = makeShoulder(0);
+  const target = makeShoulder(-0.3);
+  const aligned = alignAvatarArmReference(source, target);
+  near(t, aligned.get("LeftShoulder").world, target.get("LeftShoulder").world);
+  near(t, aligned.get("LeftArm").parentWorld, target.get("LeftShoulder").world);
+});
 
 test("A-pose arm reference aligns with T-pose without modifying the captured bind", t => {
   const makeArm = angle => {

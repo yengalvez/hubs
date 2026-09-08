@@ -1,12 +1,26 @@
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
-import { alignAvatarArmReference, captureAvatarBind, retargetAvatarClip } from "./avatar-animation-retarget";
+import {
+  alignAvatarArmReference,
+  captureAvatarBind,
+  restoreCreatorHandTracks,
+  retargetAvatarClip
+} from "./avatar-animation-retarget";
+import { compensateOmittedAnimationParents } from "./avatar-animation-parent-compensation";
 
 const clipBinds = new WeakMap();
+const clipSources = new WeakMap();
 
 export function adaptSharedClipToCreator(clip, targetBind) {
   const sourceBind = clipBinds.get(clip);
   if (!sourceBind) throw new Error("Missing source animation bind pose");
-  return retargetAvatarClip(clip, sourceBind, alignAvatarArmReference(sourceBind, targetBind));
+  const source = clipSources.get(clip);
+  if (!source) throw new Error("Missing source animation hierarchy");
+  // Full arm-chain creator avatars do not use the legacy controller-hand IK.
+  // Preserve authored wrist/finger motion instead of freezing their bind pose.
+  // Keep the shared/legacy clips unchanged and only add joints this rig owns.
+  const withHands = restoreCreatorHandTracks(clip, source, targetBind);
+  const compensated = compensateOmittedAnimationParents(withHands, source, sourceBind);
+  return retargetAvatarClip(compensated, sourceBind, alignAvatarArmReference(sourceBind, targetBind));
 }
 
 import idleGlbUrl from "../assets/animations/mixamo/idle.glb";
@@ -124,6 +138,7 @@ function filterAndRetargetClip(clip, allowedBones, opts = {}) {
 
   const out = new THREE.AnimationClip(clip.name, clip.duration, tracks);
   clipBinds.set(out, clipBinds.get(clip));
+  clipSources.set(out, clip);
   out.optimize();
   return out;
 }

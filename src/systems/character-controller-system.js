@@ -14,6 +14,7 @@ import { getCurrentPlayerHeight } from "../utils/get-current-player-height";
 import qsTruthy from "../utils/qs_truthy";
 import { releaseOccupiedWaypoint } from "../bit-systems/waypoint";
 import { shouldUseNewLoader } from "../utils/bit-utils";
+import { alignCreatorSeatViewpoint } from "../utils/avatar-seat-anchor";
 //import { m4String } from "../utils/pretty-print";
 const NAV_ZONE = "character";
 const qsAllowWaypointLerp = qsTruthy("waypointLerp");
@@ -71,6 +72,7 @@ export class CharacterControllerSystem {
 
   setSittingState(isSitting) {
     const next = !!isSitting;
+    if (!next) this.pendingCreatorSeat = null;
     if (this._lastIsSitting === next) return;
     this._lastIsSitting = next;
 
@@ -143,7 +145,7 @@ export class CharacterControllerSystem {
     const finalScale = new THREE.Vector3();
     const finalPosition = new THREE.Vector3();
     const finalPOV = new THREE.Matrix4();
-    return function travelByWaypoint(inMat4, snapToNavMesh, willMaintainInitialOrientation) {
+    return function travelByWaypoint(inMat4, snapToNavMesh, willMaintainInitialOrientation, isSeat = false) {
       this.avatarPOV.object3D.updateMatrices();
       if (!this.fly && !snapToNavMesh) {
         this.fly = true;
@@ -179,6 +181,35 @@ export class CharacterControllerSystem {
         finalPOV.copy(initialOrientation).scale(finalScale).setPosition(finalPosition);
       }
       calculateCameraTransformForWaypoint(this.avatarPOV.object3D.matrixWorld, finalPOV, finalPOV);
+      if (isSeat) {
+        const entity = this.avatarRig.querySelector("[fullbody-locomotion][ik-controller]");
+        const locomotion = entity?.components["fullbody-locomotion"];
+        const ik = entity?.components["ik-controller"];
+        const contact = locomotion?._shared.seatContact;
+        if (contact && ik?.ikRoot?.camera) {
+          ik.ikRoot.el.object3D.updateMatrices();
+          ik.ikRoot.camera.object3D.updateMatrix();
+          finalPOV.copy(
+            alignCreatorSeatViewpoint(
+              finalPOV,
+              inMat4,
+              contact,
+              ik,
+              this.avatarRig.object3D.matrixWorld,
+              this.avatarPOV.object3D.matrixWorld
+            )
+          );
+          // Recompute against the destination camera before locking; also works
+          // for travel directly from one occupied seat to a different seat.
+          ik._hasSittingPositionLock = false;
+          ik.forceIkUpdate = true;
+          this.pendingCreatorSeat = null;
+        } else if (!locomotion || !locomotion._shared.ready) {
+          this.pendingCreatorSeat = { transform: inMat4.clone(), snapToNavMesh, willMaintainInitialOrientation };
+        } else {
+          this.pendingCreatorSeat = null;
+        }
+      }
       childMatch(this.avatarRig.object3D, this.avatarPOV.object3D, finalPOV);
     };
   })();
@@ -209,6 +240,7 @@ export class CharacterControllerSystem {
       this.waypointSystem = this.waypointSystem || this.scene.systems["hubs-systems"].waypointSystem;
 
       if (!this.activeWaypoint && this.waypoints.length) {
+        this.pendingCreatorSeat = null;
         this.activeWaypoint = this.waypoints.splice(0, 1)[0];
         // Normally, do not disable motion on touchscreens because there is no way to teleport out of it.
         // But if motion AND teleporting is disabled, then disable motion because the waypoint author
@@ -261,7 +293,8 @@ export class CharacterControllerSystem {
         this.travelByWaypoint(
           this.activeWaypoint.transform,
           this.activeWaypoint.waypointComponentData.snapToNavMesh,
-          this.activeWaypoint.waypointComponentData.willMaintainInitialOrientation
+          this.activeWaypoint.waypointComponentData.willMaintainInitialOrientation,
+          this.activeWaypoint.waypointComponentData.willDisableMotion
         );
 
         // Sitting state is determined by the waypoint authoring flag (Spoke: "Disable motion").
@@ -271,6 +304,14 @@ export class CharacterControllerSystem {
         this.activeWaypoint = null;
         if (vrMode || this.waypointTravelTime > 0) {
           this.sfx.playSoundOneShot(SOUND_WAYPOINT_END);
+        }
+      }
+
+      if (this.pendingCreatorSeat && !this.activeWaypoint && this._lastIsSitting) {
+        const pending = this.pendingCreatorSeat;
+        const locomotion = this.avatarRig.querySelector("[fullbody-locomotion]")?.components["fullbody-locomotion"];
+        if (locomotion?._shared.ready) {
+          this.travelByWaypoint(pending.transform, pending.snapToNavMesh, pending.willMaintainInitialOrientation, true);
         }
       }
 

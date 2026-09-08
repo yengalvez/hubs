@@ -11,6 +11,7 @@ import { loadGLTF } from "../components/gltf-model-plus";
 import { disposeNode, findNode } from "../utils/three-utils";
 import { ensureAvatarMaterial, MAT_NAME } from "../utils/avatar-utils";
 import { fitAvatarPreviewCamera, getAvatarPreviewBounds } from "../utils/avatar-preview-bounds";
+import { fitCreatorJackets } from "../utils/avatar-creator-garment-fit";
 import { createImageBitmap, disposeImageBitmap } from "../utils/image-bitmap-utils";
 import { proxiedUrlFor } from "../utils/media-url-utils";
 import styles from "../assets/stylesheets/avatar-preview.scss";
@@ -234,6 +235,7 @@ class AvatarPreview extends Component {
 
   loadPreviewAvatar = async avatarGltfUrl => {
     const gltf = await loadGLTF(avatarGltfUrl, "model/gltf", null, ensureAvatarMaterial);
+    fitCreatorJackets(gltf.scene);
 
     if (!this.mounted) return;
 

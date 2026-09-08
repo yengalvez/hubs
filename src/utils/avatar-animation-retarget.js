@@ -1,5 +1,32 @@
 import { Quaternion, Vector3 } from "three";
 
+export function isCreatorAvatar(root) {
+  let marked = false;
+  root.traverse(node => {
+    if (node.userData?.yenhubsCreatorRig === "makehuman-mixamo-v1") marked = true;
+  });
+  return marked;
+}
+
+export function restoreCreatorHandTracks(clip, source, targetBind) {
+  const result = clip.clone();
+  const present = new Set(result.tracks.map(track => track.name));
+  for (const track of source.tracks) {
+    if (!track.name.endsWith(".quaternion")) continue;
+    const name = track.name
+      .slice(0, -".quaternion".length)
+      .replace(/^.*[|:]/, "")
+      .replace(/^mixamorig[_-]?/i, "");
+    if (!/^(Left|Right)Hand(?:$|(?:Thumb|Index|Middle|Ring|Pinky)[123]$)/.test(name)) continue;
+    if (!targetBind.has(name) || present.has(`${name}.quaternion`)) continue;
+    const cloned = track.clone();
+    cloned.name = `${name}.quaternion`;
+    result.tracks.push(cloned);
+    present.add(cloned.name);
+  }
+  return result;
+}
+
 export function captureAvatarBind(root) {
   root.updateMatrixWorld(true);
   const inverseRoot = root.getWorldQuaternion(new Quaternion()).invert();
@@ -9,6 +36,11 @@ export function captureAvatarBind(root) {
     // skeleton nodes as Object3D rather than Bone. Keep named transforms too.
     if (!node.name) return;
     const name = node.name.replace(/^.*[|:]/, "").replace(/^mixamorig[_-]?/i, "");
+    // Hubs inflation moves a joint's local transform onto a same-named Group,
+    // leaving the original Bone (and its extras) at identity beneath it.
+    // PropertyBinding animates the first match: capture that same transform,
+    // not the later identity child whose parent is the joint itself.
+    if (bones.has(name)) return;
     const world = node.getWorldQuaternion(new Quaternion()).premultiply(inverseRoot);
     const parentWorld = node.parent
       ? node.parent.getWorldQuaternion(new Quaternion()).premultiply(inverseRoot)
@@ -16,18 +48,18 @@ export function captureAvatarBind(root) {
     const position = node.getWorldPosition(new Vector3()).sub(root.getWorldPosition(new Vector3()));
     position.applyQuaternion(inverseRoot);
     const parentName = node.parent && node.parent.name.replace(/^.*[|:]/, "").replace(/^mixamorig[_-]?/i, "");
-    bones.set(name, { world, parentWorld, position, parentName });
+    bones.set(name, { world, parentWorld, position, parentName, nodeName: node.name });
   });
   return bones;
 }
 
 // Match the reference limb directions as well as the joint axes. Otherwise
 // applying a T-pose clip to an A-pose mesh lowers the arms twice.
+// Clavicle slope is anatomy, not arm reference pose: do not flatten shoulders.
 export function alignAvatarArmReference(sourceBind, targetBind) {
   const aligned = new Map(Array.from(targetBind, ([name, value]) => [name, { ...value, world: value.world.clone() }]));
   for (const side of ["Left", "Right"]) {
     for (const [bone, child] of [
-      ["Shoulder", "Arm"],
       ["Arm", "ForeArm"],
       ["ForeArm", "Hand"]
     ]) {
@@ -40,7 +72,16 @@ export function alignAvatarArmReference(sourceBind, targetBind) {
       if (!source?.position || !target?.position || !sourceChild?.position || !targetChild?.position) continue;
       const from = targetChild.position.clone().sub(target.position).normalize();
       const to = sourceChild.position.clone().sub(source.position).normalize();
-      aligned.get(name).world.premultiply(new Quaternion().setFromUnitVectors(from, to));
+      const swing = new Quaternion().setFromUnitVectors(from, to);
+      aligned.get(name).world.premultiply(swing);
+      // The wrist and fingers belong to the same reference-pose change as the
+      // forearm. Leaving their world bind in the original A-pose bends the
+      // wrist back when a T-pose hand track is retargeted onto the lowered arm.
+      if (bone === "ForeArm") {
+        for (const [descendantName, descendant] of aligned) {
+          if (descendantName.startsWith(`${side}Hand`)) descendant.world.premultiply(swing);
+        }
+      }
     }
   }
   for (const value of aligned.values()) {
@@ -81,7 +122,11 @@ export function retargetAvatarClip(clip, sourceBind, targetBind) {
     if (!sourceBind.has(name) || !targetBind.has(name)) {
       throw new Error(`Missing animation bind bone: ${name}`);
     }
-    return retargetQuaternionTrack(track, sourceBind.get(name), targetBind.get(name));
+    const result = retargetQuaternionTrack(track, sourceBind.get(name), targetBind.get(name));
+    // Only the main humanoid joints are renamed by Hubs inflation. Fingers may
+    // retain their sanitized glTF namespace; bind to the actual captured node.
+    result.name = `${targetBind.get(name).nodeName || name}.quaternion`;
+    return result;
   });
   return result;
 }

@@ -13,6 +13,10 @@ export function fitCreatorJackets(root) {
     // Never mutate another avatar's cached geometry. Bundled vertices use metres,
     // Y up; keep the collar, sleeves and upper torso unchanged.
     const geometry = mesh.geometry.clone();
+    // This Three.js version shares userData in BufferGeometry.clone(). Keep
+    // the fitted marker private: otherwise cached/headless/remote copies are
+    // marked as fitted even though their vertex buffers were never adjusted.
+    geometry.userData = { ...geometry.userData };
     geometry.computeBoundingBox();
     const hem = geometry.boundingBox.min.y;
     const position = geometry.attributes.position;

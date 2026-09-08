@@ -41,6 +41,41 @@ test("jacket clearance is bounded, preserves seams/skin attributes and is idempo
   t.is(untouched.geometry, geometry);
 });
 
+test("cached, local headless and remote jacket copies each receive exactly one identical fit", t => {
+  const cached = new BufferGeometry();
+  cached.userData.source = "preserved";
+  cached.setAttribute("position", new Float32BufferAttribute([0.1, 0.7, -0.1, 0.1, 1.2, -0.1], 3));
+  const material = new MeshStandardMaterial();
+  material.name = "Human.toigo_male_double-breasted_suit";
+  const local = new Group();
+  local.userData.yenhubsCreatorRig = "makehuman-mixamo-v1";
+  const original = new Mesh(cached, material);
+  const headless = new Mesh(cached.clone(), material);
+  local.add(original, headless);
+  const remote = new Group();
+  remote.userData.yenhubsCreatorRig = "makehuman-mixamo-v1";
+  const replica = new Mesh(cached, material);
+  remote.add(replica);
+  const before = Array.from(cached.attributes.position.array);
+
+  fitCreatorJackets(local);
+  fitCreatorJackets(remote);
+  t.deepEqual(cached.userData, { source: "preserved" });
+  t.deepEqual(Array.from(cached.attributes.position.array), before);
+  const expected = Array.from(original.geometry.attributes.position.array);
+  t.notDeepEqual(expected, before);
+  for (const mesh of [original, headless, replica]) {
+    t.deepEqual(Array.from(mesh.geometry.attributes.position.array), expected);
+    t.is(mesh.geometry.userData.creatorJacketClearance, 1);
+    t.not(mesh.geometry.userData, cached.userData);
+  }
+  fitCreatorJackets(local);
+  fitCreatorJackets(remote);
+  t.deepEqual(Array.from(original.geometry.attributes.position.array), expected);
+  t.deepEqual(Array.from(headless.geometry.attributes.position.array), expected);
+  t.deepEqual(Array.from(replica.geometry.attributes.position.array), expected);
+});
+
 test("creator height aligns the head with Hubs' floor viewpoint without cumulative scaling", t => {
   const json = {
     scene: 0,

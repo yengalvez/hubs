@@ -258,8 +258,15 @@ AFRAME.registerComponent("ik-controller", {
     const isSitting = !!(playerInfo && playerInfo.data && playerInfo.data.isSitting);
     if (isSitting !== this._lastIsSitting) {
       if (isSitting) {
-        this._sittingLockedPosition.copy(this.avatar.position);
-        this._hasSittingPositionLock = true;
+        // A creator may have just travelled to a calibrated seat. Its old root
+        // position belongs to the previous camera; resolve the new one first.
+        if (isCreatorAvatar(this.avatar)) {
+          this._hasSittingPositionLock = false;
+          this.forceIkUpdate = true;
+        } else {
+          this._sittingLockedPosition.copy(this.avatar.position);
+          this._hasSittingPositionLock = true;
+        }
       } else {
         this._hasSittingPositionLock = false;
       }

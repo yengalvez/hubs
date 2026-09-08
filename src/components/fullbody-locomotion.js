@@ -15,6 +15,8 @@
 import { getSharedMixamoLocomotionClips, adaptSharedClipToCreator } from "../utils/mixamo-shared-animations";
 import { captureAvatarBind, isCreatorAvatar } from "../utils/avatar-animation-retarget";
 import { fitCreatorJackets } from "../utils/avatar-creator-garment-fit";
+import { avatarLocomotionDirection } from "../utils/avatar-locomotion-direction";
+import { measureCreatorSeatContact } from "../utils/avatar-seat-contact";
 
 const { Vector3, MathUtils } = THREE;
 
@@ -152,6 +154,7 @@ AFRAME.registerComponent("fullbody-locomotion", {
         return clip;
       })();
 
+      this._shared.seatContact = measureCreatorSeatContact(root, retargetedSit);
       const mixer = new THREE.AnimationMixer(root);
       const actions = {
         idle: mixer.clipAction(idle),
@@ -247,29 +250,15 @@ AFRAME.registerComponent("fullbody-locomotion", {
         if (this.data.forceForward) {
           target = "walk";
         } else {
-          // Decide between forward/back/strafe based on horizontal velocity in avatar-local space.
-          //
-          // Convention: in three.js, an object's "forward" is typically -Z in local space.
+          // Use the rendered body's +Z forward, including the yaw applied by IK.
+          // player-info is a container, not the actual body heading.
           this._tmpVel.set(dx / dtSeconds, 0, dz / dtSeconds);
-
-          const dirRoot = (this._playerInfoEl && this._playerInfoEl.object3D) || root;
-          dirRoot.getWorldQuaternion(this._tmpQuat);
+          root.getWorldQuaternion(this._tmpQuat);
           this._tmpQuat.invert();
           this._tmpVel.applyQuaternion(this._tmpQuat);
           this._tmpVel.y = 0;
 
-          const angle = Math.atan2(this._tmpVel.x, -this._tmpVel.z); // [-pi..pi], 0 = forward
-          const abs = Math.abs(angle);
-
-          if (abs <= Math.PI / 4) {
-            target = "walk";
-          } else if (abs >= (3 * Math.PI) / 4) {
-            target = "walkBack";
-          } else if (angle > 0) {
-            target = "strafeRight";
-          } else {
-            target = "strafeLeft";
-          }
+          target = avatarLocomotionDirection(this._tmpVel.x, this._tmpVel.z);
         }
       }
 

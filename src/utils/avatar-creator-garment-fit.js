@@ -1,4 +1,5 @@
 import { isCreatorAvatar } from "./avatar-animation-retarget";
+import { fitCreatorGarmentHems, isCreatorSuitTrousers } from "./avatar-creator-garment-hems";
 
 // Compatibility correction for the bundled MakeHuman jackets, including GLBs
 // already saved by the creator. Imported third-party avatars are not touched.
@@ -8,6 +9,9 @@ export function fitCreatorJackets(root) {
   if (!isCreatorAvatar(root)) return;
   root.traverse(mesh => {
     if (!mesh.isMesh || !mesh.geometry || Array.isArray(mesh.material)) return;
+    // The separated suit trousers retain the jacket material. They are not a
+    // jacket hem, and expanding them at ankle height breaks their fit to shoes.
+    if (isCreatorSuitTrousers(mesh)) return;
     if (!/^Human\.toigo_male_(double-breasted_suit|suit_tie_and_jacket)$/.test(mesh.material?.name || "")) return;
     if (mesh.geometry.userData.creatorJacketClearance === 1) return;
     // Never mutate another avatar's cached geometry. Bundled vertices use metres,
@@ -66,4 +70,5 @@ export function fitCreatorJackets(root) {
     geometry.userData.creatorJacketClearance = 1;
     mesh.geometry = geometry;
   });
+  fitCreatorGarmentHems(root);
 }

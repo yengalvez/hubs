@@ -8,6 +8,25 @@ export function isCreatorAvatar(root) {
   return marked;
 }
 
+export function restoreCreatorHandTracks(clip, source, targetBind) {
+  const result = clip.clone();
+  const present = new Set(result.tracks.map(track => track.name));
+  for (const track of source.tracks) {
+    if (!track.name.endsWith(".quaternion")) continue;
+    const name = track.name
+      .slice(0, -".quaternion".length)
+      .replace(/^.*[|:]/, "")
+      .replace(/^mixamorig[_-]?/i, "");
+    if (!/^(Left|Right)Hand(?:$|(?:Thumb|Index|Middle|Ring|Pinky)[123]$)/.test(name)) continue;
+    if (!targetBind.has(name) || present.has(`${name}.quaternion`)) continue;
+    const cloned = track.clone();
+    cloned.name = `${name}.quaternion`;
+    result.tracks.push(cloned);
+    present.add(cloned.name);
+  }
+  return result;
+}
+
 export function captureAvatarBind(root) {
   root.updateMatrixWorld(true);
   const inverseRoot = root.getWorldQuaternion(new Quaternion()).invert();
@@ -29,7 +48,7 @@ export function captureAvatarBind(root) {
     const position = node.getWorldPosition(new Vector3()).sub(root.getWorldPosition(new Vector3()));
     position.applyQuaternion(inverseRoot);
     const parentName = node.parent && node.parent.name.replace(/^.*[|:]/, "").replace(/^mixamorig[_-]?/i, "");
-    bones.set(name, { world, parentWorld, position, parentName });
+    bones.set(name, { world, parentWorld, position, parentName, nodeName: node.name });
   });
   return bones;
 }
@@ -53,7 +72,16 @@ export function alignAvatarArmReference(sourceBind, targetBind) {
       if (!source?.position || !target?.position || !sourceChild?.position || !targetChild?.position) continue;
       const from = targetChild.position.clone().sub(target.position).normalize();
       const to = sourceChild.position.clone().sub(source.position).normalize();
-      aligned.get(name).world.premultiply(new Quaternion().setFromUnitVectors(from, to));
+      const swing = new Quaternion().setFromUnitVectors(from, to);
+      aligned.get(name).world.premultiply(swing);
+      // The wrist and fingers belong to the same reference-pose change as the
+      // forearm. Leaving their world bind in the original A-pose bends the
+      // wrist back when a T-pose hand track is retargeted onto the lowered arm.
+      if (bone === "ForeArm") {
+        for (const [descendantName, descendant] of aligned) {
+          if (descendantName.startsWith(`${side}Hand`)) descendant.world.premultiply(swing);
+        }
+      }
     }
   }
   for (const value of aligned.values()) {
@@ -94,7 +122,11 @@ export function retargetAvatarClip(clip, sourceBind, targetBind) {
     if (!sourceBind.has(name) || !targetBind.has(name)) {
       throw new Error(`Missing animation bind bone: ${name}`);
     }
-    return retargetQuaternionTrack(track, sourceBind.get(name), targetBind.get(name));
+    const result = retargetQuaternionTrack(track, sourceBind.get(name), targetBind.get(name));
+    // Only the main humanoid joints are renamed by Hubs inflation. Fingers may
+    // retain their sanitized glTF namespace; bind to the actual captured node.
+    result.name = `${targetBind.get(name).nodeName || name}.quaternion`;
+    return result;
   });
   return result;
 }

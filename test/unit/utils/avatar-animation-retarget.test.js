@@ -1,15 +1,64 @@
 import test from "ava";
-import { Bone, Group, Object3D, Quaternion, QuaternionKeyframeTrack, Vector3 } from "three";
+import {
+  AnimationClip,
+  AnimationMixer,
+  Bone,
+  Group,
+  Object3D,
+  Quaternion,
+  QuaternionKeyframeTrack,
+  Vector3
+} from "three";
 import {
   alignAvatarArmReference,
   captureAvatarBind,
   isCreatorAvatar,
+  restoreCreatorHandTracks,
+  retargetAvatarClip,
   retargetQuaternionTrack
 } from "../../../src/utils/avatar-animation-retarget";
 
 const rotation = (axis, angle) => new Quaternion().setFromAxisAngle(new Vector3(...axis), angle);
 const bind = (parentWorld, local) => ({ parentWorld, world: parentWorld.clone().multiply(local) });
 const near = (t, actual, expected) => t.true(actual.angleTo(expected) < 0.001);
+
+test("retargeted fingers bind to the actual namespaced runtime node", t => {
+  const source = new Group();
+  const sourceFinger = new Bone();
+  sourceFinger.name = "LeftHandIndex1";
+  source.add(sourceFinger);
+  const target = source.clone(true);
+  target.children[0].name = "mixamorigLeftHandIndex1";
+  const expected = rotation([1, 0, 0], 0.5);
+  const clip = new AnimationClip("finger", 1, [
+    new QuaternionKeyframeTrack("LeftHandIndex1.quaternion", [0], expected.toArray())
+  ]);
+  const result = retargetAvatarClip(clip, captureAvatarBind(source), captureAvatarBind(target));
+  t.is(result.tracks[0].name, "mixamorigLeftHandIndex1.quaternion");
+  const mixer = new AnimationMixer(target);
+  mixer.clipAction(result).play();
+  mixer.update(0.1);
+  near(t, target.children[0].quaternion, expected);
+});
+
+test("creator hand tracks restore authored motion without altering legacy clips or adding absent joints", t => {
+  const q = [0, 0, 0, 1];
+  const tracks = ["mixamorig:LeftHand", "mixamorigRightHand", "LeftHandIndex1", "RightHandPinky3", "Head"].map(
+    name => new QuaternionKeyframeTrack(`${name}.quaternion`, [0], q)
+  );
+  const source = new AnimationClip("source", 1, tracks);
+  const legacy = new AnimationClip("legacy", 1, []);
+  const target = new Map(["LeftHand", "RightHand", "LeftHandIndex1"].map(name => [name, {}]));
+  const result = restoreCreatorHandTracks(legacy, source, target);
+  t.deepEqual(
+    result.tracks.map(track => track.name),
+    ["LeftHand.quaternion", "RightHand.quaternion", "LeftHandIndex1.quaternion"]
+  );
+  t.is(legacy.tracks.length, 0);
+  t.is(source.tracks[0].name, "mixamorig:LeftHand.quaternion");
+  t.not(result.tracks[0], source.tracks[0]);
+  t.is(restoreCreatorHandTracks(result, source, target).tracks.length, 3);
+});
 
 test("inflated Hubs joints keep the first animation target and find original rig extras", t => {
   const root = new Group();
@@ -66,6 +115,10 @@ test("A-pose arm reference aligns with T-pose without modifying the captured bin
     root.add(arm);
     arm.add(forearm);
     forearm.add(hand);
+    const finger = new Object3D();
+    finger.name = "LeftHandIndex1";
+    finger.position.x = 0.1;
+    hand.add(finger);
     return captureAvatarBind(root);
   };
   const source = makeArm(0);
@@ -73,6 +126,9 @@ test("A-pose arm reference aligns with T-pose without modifying the captured bin
   const aligned = alignAvatarArmReference(source, target);
   near(t, aligned.get("LeftArm").world, source.get("LeftArm").world);
   near(t, aligned.get("LeftForeArm").parentWorld, aligned.get("LeftArm").world);
+  near(t, aligned.get("LeftHand").world, source.get("LeftHand").world);
+  near(t, aligned.get("LeftHandIndex1").world, source.get("LeftHandIndex1").world);
+  near(t, aligned.get("LeftHandIndex1").parentWorld, aligned.get("LeftHand").world);
   near(t, target.get("LeftArm").world, rotation([0, 0, 1], -Math.PI / 4));
 });
 

@@ -1,5 +1,10 @@
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
-import { alignAvatarArmReference, captureAvatarBind, retargetAvatarClip } from "./avatar-animation-retarget";
+import {
+  alignAvatarArmReference,
+  captureAvatarBind,
+  restoreCreatorHandTracks,
+  retargetAvatarClip
+} from "./avatar-animation-retarget";
 import { compensateOmittedAnimationParents } from "./avatar-animation-parent-compensation";
 
 const clipBinds = new WeakMap();
@@ -10,7 +15,11 @@ export function adaptSharedClipToCreator(clip, targetBind) {
   if (!sourceBind) throw new Error("Missing source animation bind pose");
   const source = clipSources.get(clip);
   if (!source) throw new Error("Missing source animation hierarchy");
-  const compensated = compensateOmittedAnimationParents(clip, source, sourceBind);
+  // Full arm-chain creator avatars do not use the legacy controller-hand IK.
+  // Preserve authored wrist/finger motion instead of freezing their bind pose.
+  // Keep the shared/legacy clips unchanged and only add joints this rig owns.
+  const withHands = restoreCreatorHandTracks(clip, source, targetBind);
+  const compensated = compensateOmittedAnimationParents(withHands, source, sourceBind);
   return retargetAvatarClip(compensated, sourceBind, alignAvatarArmReference(sourceBind, targetBind));
 }
 

@@ -1,10 +1,20 @@
 import test from "ava";
 import fs from "fs";
 import path from "path";
-import { AnimationClip, AnimationMixer, Group, Object3D, Quaternion, QuaternionKeyframeTrack } from "three";
+import {
+  AnimationClip,
+  AnimationMixer,
+  Group,
+  Object3D,
+  PropertyBinding,
+  Quaternion,
+  QuaternionKeyframeTrack
+} from "three";
+import { ensureAvatarNodes } from "../../../src/utils/avatar-gltf-normalizer";
 import {
   alignAvatarArmReference,
   captureAvatarBind,
+  restoreCreatorHandTracks,
   retargetAvatarClip
 } from "../../../src/utils/avatar-animation-retarget";
 import { compensateOmittedAnimationParents } from "../../../src/utils/avatar-animation-parent-compensation";
@@ -14,14 +24,16 @@ const names = ["Left", "Right"].flatMap(side =>
 );
 const normalize = name => name.replace(/^.*[|:]/, "").replace(/^mixamorig[_-]?/i, "");
 
-function load(file) {
+function load(file, runtimeNames = false) {
   const bytes = fs.readFileSync(path.resolve(__dirname, "../../../src/assets", file));
   const length = bytes.readUInt32LE(12);
   const json = JSON.parse(bytes.toString("utf8", 20, 20 + length));
+  if (runtimeNames) ensureAvatarNodes(json);
   const binary = 28 + length;
   const nodes = json.nodes.map(node => {
     const object = new Object3D();
-    object.name = normalize(node.name || "");
+    const name = normalize(node.name || "");
+    object.name = runtimeNames ? PropertyBinding.sanitizeNodeName(node.name || "") : name;
     if (node.matrix) object.matrix.fromArray(node.matrix).decompose(object.position, object.quaternion, object.scale);
     else {
       if (node.translation) object.position.fromArray(node.translation);
@@ -58,10 +70,10 @@ function load(file) {
 }
 
 for (const body of ["male", "female"]) {
-  for (const motion of ["walk", "walk-backwards", "walk-strafe-left", "walk-strafe-right"]) {
+  for (const motion of ["idle", "walk", "walk-backwards", "walk-strafe-left", "walk-strafe-right", "sit"]) {
     test(`${body} ${motion}: filtered limbs preserve the original animated hierarchy`, t => {
       const source = load(`animations/mixamo/${motion}.glb`);
-      const model = load(`models/avatar-creator/${body}.glb`).root;
+      const model = load(`models/avatar-creator/${body}.glb`, true).root;
       const actual = model.clone(true);
       const sourceBind = captureAvatarBind(source.root);
       const targetBind = alignAvatarArmReference(sourceBind, captureAvatarBind(model));
@@ -69,10 +81,11 @@ for (const body of ["male", "female"]) {
       reference.tracks = reference.tracks.filter(track => targetBind.has(track.name.slice(0, -11)));
       const filtered = source.clip.clone();
       filtered.tracks = filtered.tracks.filter(track => names.includes(track.name.slice(0, -11)));
-      const compensated = compensateOmittedAnimationParents(filtered, source.clip, sourceBind);
+      const withHands = restoreCreatorHandTracks(filtered, source.clip, targetBind);
+      const compensated = compensateOmittedAnimationParents(withHands, source.clip, sourceBind);
       t.deepEqual(
         compensated.tracks.map(track => track.name),
-        filtered.tracks.map(track => track.name)
+        withHands.tracks.map(track => track.name)
       );
       const fullMixer = new AnimationMixer(model);
       const actualMixer = new AnimationMixer(actual);
@@ -92,9 +105,11 @@ for (const body of ["male", "female"]) {
         actualMixer.setTime(time);
         model.updateMatrixWorld(true);
         actual.updateMatrixWorld(true);
-        for (const name of names) {
-          const expected = model.getObjectByName(name).getWorldQuaternion(new Quaternion()).normalize();
-          const observed = actual.getObjectByName(name).getWorldQuaternion(new Quaternion()).normalize();
+        const handNames = [...targetBind.keys()].filter(name => /^(Left|Right)Hand/.test(name));
+        for (const name of [...names, ...handNames]) {
+          const nodeName = targetBind.get(name).nodeName;
+          const expected = model.getObjectByName(nodeName).getWorldQuaternion(new Quaternion()).normalize();
+          const observed = actual.getObjectByName(nodeName).getWorldQuaternion(new Quaternion()).normalize();
           maxAngle = Math.max(maxAngle, observed.angleTo(expected));
         }
       }

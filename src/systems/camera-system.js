@@ -17,6 +17,7 @@ import {
 } from "../utils/bit-utils";
 import { addComponent, defineQuery, removeComponent } from "bitecs";
 import { INSPECTABLE_FLAGS } from "../bit-systems/inspect-system";
+import { createCreatorViewpointClassifier, creatorViewpointPosition } from "../utils/avatar-creator-viewpoint";
 
 function getInspectableInHierarchy(eid) {
   let inspectable = findAncestorWithComponent(APP.world, Inspectable, eid);
@@ -456,6 +457,8 @@ export class CameraSystem {
     const position = new THREE.Vector3();
     const quat = new THREE.Quaternion();
     const scale = new THREE.Vector3();
+    const opticalPosition = new THREE.Vector3();
+    const isCreatorViewpoint = createCreatorViewpointClassifier();
     let uiRoot;
     const hoveredQuery = defineQuery([HoveredRemoteRight]);
     return function tick(scene, dt) {
@@ -532,6 +535,9 @@ export class CameraSystem {
         } else {
           this.avatarPOV.object3D.updateMatrices();
           this.avatarPOV.object3D.matrixWorld.decompose(position, quat, scale);
+          const avatarMesh = this.avatarRig.querySelector(".model")?.getObject3D("mesh");
+          creatorViewpointPosition(position, quat, isCreatorViewpoint(avatarMesh), opticalPosition);
+          position.copy(opticalPosition);
           tmpMat.compose(position, quat, V_ONE);
           setMatrixWorld(this.viewingCamera, tmpMat);
         }

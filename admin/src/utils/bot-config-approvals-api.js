@@ -89,9 +89,30 @@ function isTimestamp(value, nullable = true) {
   );
 }
 
+function compareDecimalStrings(left, right) {
+  if (left.length !== right.length) return left.length < right.length ? -1 : 1;
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
 function isAccountId(value, nullable = true) {
   if (value === null) return nullable;
+  if (typeof value === "string") {
+    return /^[1-9][0-9]{0,18}$/.test(value) && compareDecimalStrings(value, "9223372036854775807") <= 0;
+  }
   return Number.isSafeInteger(value) && value > 0;
+}
+
+function parseApprovalJson(text) {
+  // Reticulum serializes PostgreSQL bigint actor IDs as JSON numbers. Preserve
+  // their exact digits before JSON.parse can round them; quoted text is untouched.
+  const preserved = text.replace(
+    /"(?:[^"\\]|\\[\s\S])*"|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/g,
+    token => {
+      return /^[1-9][0-9]{15,}$/.test(token) && !Number.isSafeInteger(Number(token)) ? JSON.stringify(token) : token;
+    }
+  );
+  return JSON.parse(preserved);
 }
 
 function isFingerprint(value, nullable = true) {
@@ -273,7 +294,7 @@ async function parseJsonResponse(response, { ambiguous = false } = {}) {
 
   let json;
   try {
-    json = JSON.parse(text);
+    json = parseApprovalJson(text);
   } catch {
     throw contractError("invalid_json");
   }
@@ -299,12 +320,6 @@ function assertSignal(signal) {
   if (signal !== undefined && (!signal || typeof signal.aborted !== "boolean")) {
     throw new TypeError("signal must be an AbortSignal");
   }
-}
-
-function compareDecimalStrings(left, right) {
-  if (left.length !== right.length) return left.length < right.length ? -1 : 1;
-  if (left === right) return 0;
-  return left < right ? -1 : 1;
 }
 
 export function createBotConfigApprovalClient({ fetchImpl, getToken, buildUrl }) {

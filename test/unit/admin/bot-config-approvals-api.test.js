@@ -97,6 +97,54 @@ function createClient(fetchImpl) {
   });
 }
 
+function rawInventoryClient(actorToken, transform = value => value) {
+  const body = JSON.stringify({ approvals: [approval()], next_cursor: null, protocol: 1 }).replace(
+    '"created_by_account_id":7',
+    `"created_by_account_id":${actorToken}`
+  );
+  return createClient(
+    async () =>
+      new Response(transform(body), {
+        headers: { "cache-control": "private, no-store", "content-type": "application/json" }
+      })
+  );
+}
+
+test("raw PostgreSQL bigint actor IDs keep every digit while safe IDs and null stay unchanged", async t => {
+  for (const id of ["9007199254740993", "9223372036854775807"]) {
+    const [entry] = await rawInventoryClient(id).listAll();
+    t.is(entry.created_by_account_id, id);
+    t.is(entry.approved_by_account_id, null);
+  }
+  const [safe] = await rawInventoryClient("7").listAll();
+  t.is(safe.created_by_account_id, 7);
+  const [quoted] = await rawInventoryClient('"9007199254740993"').listAll();
+  t.is(quoted.created_by_account_id, "9007199254740993");
+});
+
+test("invalid or out-of-range actor IDs remain fail-closed", async t => {
+  for (const token of ["9223372036854775808", "-9007199254740993", "9.007199254740993e15", "0", '"01"', '"1e9"']) {
+    await t.throwsAsync(() => rawInventoryClient(token).listAll(), { message: "invalid_actor_id" });
+  }
+  t.throws(() => validateApprovalEntry(approval({ created_by_account_id: Number("9007199254740993") })), {
+    message: "invalid_actor_id"
+  });
+});
+
+test("preserving actor IDs does not relax numeric summaries or alter quoted JSON", async t => {
+  await t.throwsAsync(
+    () => rawInventoryClient("7", body => body.replace('"count":2', '"count":9007199254740993')).listAll(),
+    { message: "invalid_candidate_summary" }
+  );
+  const [entry] = await rawInventoryClient("9007199254740993", body =>
+    body.replace('"room-a"', '"9007199254740995"')
+  ).listAll();
+  t.is(entry.hub_sid, "9007199254740995");
+  await t.throwsAsync(() => rawInventoryClient("9007199254740993", body => body.slice(0, -1)).listAll(), {
+    message: "invalid_json"
+  });
+});
+
 test("authenticated requests are no-store, redirect-safe and traverse the complete cursor inventory", async t => {
   const requests = [];
   const fetchImpl = async (url, options) => {

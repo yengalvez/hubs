@@ -132,6 +132,12 @@ function createDefaultAppConfig() {
     }
   }
 
+  // A local full-client preview can opt into a real Avaturn project without
+  // changing tracked app config or enabling the production feature.
+  if (process.env.AVATURN_CREATOR_URL) {
+    appConfig.links.avaturn_creator = process.env.AVATURN_CREATOR_URL;
+  }
+
   const themesPath = path.join(__dirname, "themes.json");
 
   if (fs.existsSync(themesPath)) {
@@ -355,14 +361,41 @@ module.exports = async (env, argv) => {
           warnings: false
         }
       },
-      server: {
-        type: "https",
-        options: createHTTPSConfig()
-      },
+      server: process.env.DEV_HTTP
+        ? { type: "http" }
+        : {
+            type: "https",
+            options: createHTTPSConfig()
+          },
       host: "0.0.0.0",
       port: 8080,
       allowedHosts: [host, internalHostname],
       headers: devServerHeaders,
+      proxy: process.env.DEV_RETICULUM_PROXY
+        ? {
+            "/api": {
+              target: `https://${process.env.DEV_RETICULUM_PROXY}`,
+              changeOrigin: true,
+              secure: true
+            },
+            "/socket": {
+              target: `wss://${process.env.DEV_RETICULUM_PROXY}`,
+              changeOrigin: true,
+              secure: true,
+              ws: true
+            },
+            "/cors-proxy": {
+              target: `https://cors.${process.env.DEV_RETICULUM_PROXY}`,
+              changeOrigin: true,
+              pathRewrite: { "^/cors-proxy": "" },
+              secure: true,
+              onProxyRes(proxyRes) {
+                proxyRes.headers["access-control-allow-origin"] = "*";
+                delete proxyRes.headers["access-control-allow-credentials"];
+              }
+            }
+          }
+        : undefined,
       hot: liveReload,
       liveReload: liveReload,
       historyApiFallback: {
@@ -749,6 +782,7 @@ module.exports = async (env, argv) => {
           NODE_ENV: argv.mode,
           SHORTLINK_DOMAIN: process.env.SHORTLINK_DOMAIN,
           RETICULUM_SERVER: process.env.RETICULUM_SERVER,
+          RETICULUM_SERVER_PROTOCOL: process.env.RETICULUM_SERVER_PROTOCOL,
           RETICULUM_SOCKET_SERVER: process.env.RETICULUM_SOCKET_SERVER,
           THUMBNAIL_SERVER: process.env.THUMBNAIL_SERVER,
           CORS_PROXY_SERVER: process.env.CORS_PROXY_SERVER,

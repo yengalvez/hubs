@@ -62,7 +62,7 @@ export default class AvaturnCreator extends Component {
       const file = await avaturnExportToFile(result, this.props.creatorUrl);
       const accepted = await this.props.onExport(file);
       if (accepted === false) throw new Error("Avaturn devolvió un avatar que YenHubs no puede usar.");
-      if (!this.unmounted) this.setState({ status: "ready", error: null });
+      if (!this.unmounted) this.setState({ status: "received", error: null });
     } catch (error) {
       this.fail(error && error.message ? error.message : "No se pudo importar el avatar desde Avaturn.");
     }
@@ -99,6 +99,14 @@ export default class AvaturnCreator extends Component {
             <FormattedMessage
               id="avaturn-creator.importing"
               defaultMessage="Receiving and checking your avatar. It will be saved automatically..."
+            />
+          </p>
+        )}
+        {status === "received" && (
+          <p className="avaturn-status" role="status">
+            <FormattedMessage
+              id="avaturn-creator.received"
+              defaultMessage="Avatar received correctly. YenHubs is checking it and will save it to your account."
             />
           </p>
         )}

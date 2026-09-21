@@ -1923,7 +1923,7 @@ class UIRoot extends Component {
                     className={styles.avatarEditor}
                     signedIn={this.state.signedIn}
                     onSignIn={this.showContextualSignInDialog}
-                    onSave={() => {
+                    onSave={savedAvatar => {
                       if (props.location.state.detail && props.location.state.detail.returnToProfile) {
                         this.props.history.goBack();
                       } else {
@@ -1932,7 +1932,7 @@ class UIRoot extends Component {
                         // my-avatars, now that we've saved an avatar.
                         this.props.mediaSearchStore.sourceNavigateWithNoNav("avatars", "use");
                       }
-                      this.props.onAvatarSaved();
+                      this.props.onAvatarSaved(savedAvatar);
                     }}
                     onClose={() => this.props.history.goBack()}
                     store={this.props.store}

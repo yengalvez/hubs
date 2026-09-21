@@ -50,7 +50,8 @@ let invalidatedReticulumMetaThisSession = false;
 
 export function getReticulumFetchUrl(path, absolute = false, host = null, port = null) {
   if (host || hasReticulumServer()) {
-    return `https://${host || configs.RETICULUM_SERVER}${port ? `:${port}` : ""}${path}`;
+    const protocol = configs.RETICULUM_SERVER_PROTOCOL || "https:";
+    return `${protocol}//${host || configs.RETICULUM_SERVER}${port ? `:${port}` : ""}${path}`;
   } else if (absolute) {
     resolverLink.href = path;
     return resolverLink.href;

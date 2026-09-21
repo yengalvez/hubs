@@ -159,7 +159,7 @@ class AvatarEditor extends Component {
   handleAvaturnExportStart = () => {
     this.avaturnAutoSavePending = true;
     this.invalidateCreatorFile();
-    this.setState({ avaturnSaveAttempted: false });
+    this.setState({ avaturnSaveAttempted: false, avaturnSaveState: "receiving" });
   };
 
   acceptAvaturnFile = async file => {
@@ -170,10 +170,12 @@ class AvatarEditor extends Component {
 
   handleAvaturnError = () => {
     this.avaturnAutoSavePending = false;
+    this.setState({ avaturnSaveState: "error" });
   };
 
   componentWillUnmount() {
     clearTimeout(this.avaturnAutoSaveTimer);
+    clearTimeout(this.avaturnSuccessTimer);
     this.glbSelectionId++;
     revokeObjectUrl(this.state.previewGltfUrl);
     const files = (this.state.avatar && this.state.avatar.files) || {};
@@ -245,8 +247,13 @@ class AvatarEditor extends Component {
       return;
     }
 
+    const isAvaturnMode = this.props.mode === "avaturn";
     let gltfUrl = null;
-    this.setState({ uploadError: null, uploading: true });
+    this.setState({
+      uploadError: null,
+      uploading: true,
+      ...(isAvaturnMode ? { avaturnSaveState: "saving" } : {})
+    });
 
     try {
       if (localGlb) {
@@ -299,14 +306,21 @@ class AvatarEditor extends Component {
           .reduce((o, [k, v]) => ({ ...o, [k]: v }), {})
       };
 
-      await this.createOrUpdateAvatar(avatar);
-      this.setState({ uploading: false }, () => {
-        if (this.props.onSave) this.props.onSave();
+      const savedAvatar = await this.createOrUpdateAvatar(avatar);
+      this.setState({ uploading: false, ...(isAvaturnMode ? { avaturnSaveState: "saved" } : {}) }, () => {
+        if (!this.props.onSave) return;
+        if (!isAvaturnMode) {
+          this.props.onSave(savedAvatar);
+          return;
+        }
+        clearTimeout(this.avaturnSuccessTimer);
+        this.avaturnSuccessTimer = setTimeout(() => this.props.onSave(savedAvatar), 1400);
       });
     } catch (error) {
       console.error("Failed to upload avatar.", error);
       this.setState({
         uploading: false,
+        ...(isAvaturnMode ? { avaturnSaveState: "error" } : {}),
         uploadError: error && error.message ? error.message : "No se pudo subir el avatar. Inténtalo de nuevo."
       });
     } finally {
@@ -744,6 +758,22 @@ class AvatarEditor extends Component {
                       )
                     )}
                     {this.state.uploadError && <p className="error-text">{this.state.uploadError}</p>}
+                    {isAvaturnMode && this.state.avaturnSaveState === "saving" && (
+                      <p className="avaturn-save-status" role="status">
+                        <FormattedMessage
+                          id="avatar-editor.avaturn-saving"
+                          defaultMessage="Avatar ready. Saving it to your YenHubs account..."
+                        />
+                      </p>
+                    )}
+                    {isAvaturnMode && this.state.avaturnSaveState === "saved" && (
+                      <p className="avaturn-save-status success" role="status">
+                        <FormattedMessage
+                          id="avatar-editor.avaturn-saved"
+                          defaultMessage="Avatar saved. Returning to My Avatars..."
+                        />
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>

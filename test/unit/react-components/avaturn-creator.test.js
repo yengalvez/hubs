@@ -96,6 +96,7 @@ test.serial("the embedded editor turns Avaturn Next into one validated YenHubs e
     await sdkInstance.callbacks.export({ urlType: "dataURL", url: "data:fixture" });
   });
   t.deepEqual(events, ["start", exportedFile]);
+  t.regex(container.textContent, /Avatar received correctly/);
 
   await act(async () => root.unmount());
   t.true(sdkInstance.destroyed);

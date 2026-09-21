@@ -377,6 +377,20 @@
       font-weight: theme.$font-weight-bold;
     }
 
+    .avaturn-save-status {
+      margin: 10px 0;
+      padding: 12px 14px;
+      border: 1px solid theme.$primary-color;
+      border-radius: 10px;
+      background: rgba(20, 33, 58, 0.92);
+      font-weight: theme.$font-weight-bold;
+
+      &.success {
+        border-color: #55c98d;
+        color: #bff4d7;
+      }
+    }
+
     .avaturn-sdk-container {
       width: 100%;
       height: min(68vh, 720px);

@@ -135,7 +135,7 @@ function headerFile(name = "valid.glb") {
   return new File([bytes], name);
 }
 
-async function mount(t, mode = "private-glb") {
+async function mount(t, mode = "private-glb", onSave) {
   urls.clear();
   parsedFiles.length = uploadedFiles.length = savedAvatars.length = 0;
   const container = document.createElement("div");
@@ -145,7 +145,7 @@ async function mount(t, mode = "private-glb") {
   await act(async () =>
     root.render(
       <IntlProvider locale="en">
-        <AvatarEditor mode={mode} ref={ref} intl={{ formatMessage: m => m.defaultMessage }} />
+        <AvatarEditor mode={mode} onSave={onSave} ref={ref} intl={{ formatMessage: m => m.defaultMessage }} />
       </IntlProvider>
     )
   );
@@ -361,8 +361,9 @@ test.serial("creator failure cannot submit its previous selection", async t => {
   t.true(h.save.disabled);
 });
 
-test.serial("Avaturn export validates, previews and saves privately without a second click", async t => {
-  const h = await mount(t, "avaturn");
+test.serial("Avaturn export validates, previews, confirms and saves privately without a second click", async t => {
+  let saved;
+  const h = await mount(t, "avaturn", avatar => (saved = avatar));
   const exported = headerFile("avaturn.glb");
   await act(async () => h.editor.handleAvaturnExportStart());
   await act(async () => h.editor.acceptAvaturnFile(exported));
@@ -375,4 +376,8 @@ test.serial("Avaturn export validates, previews and saves privately without a se
   t.is(savedAvatars.length, 1);
   t.false(savedAvatars[0].allow_promotion);
   t.false(savedAvatars[0].allow_remixing);
+  t.is(h.editor.state.avaturnSaveState, "saved");
+  t.falsy(saved, "the success confirmation remains visible before returning to My Avatars");
+  await act(async () => new Promise(resolve => setTimeout(resolve, 1450)));
+  t.is(saved.avatar_id, "local-only");
 });

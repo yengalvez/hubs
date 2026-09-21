@@ -57,7 +57,8 @@ class PreviewStub extends React.Component {
 
 const stubs = {
   "./avatar-creator-controls": () => null,
-  "../utils/configs": {},
+  "./avaturn-creator": () => null,
+  "../utils/configs": { link: () => "https://yenhubs.avaturn.dev" },
   "./if-feature": () => null,
   "../utils/phoenix-utils": {
     fetchReticulumAuthenticated: async (_url, _method, { avatar }) => {
@@ -358,4 +359,20 @@ test.serial("creator failure cannot submit its previous selection", async t => {
   t.is(uploadedFiles.length, 0);
   t.is(savedAvatars.length, 0);
   t.true(h.save.disabled);
+});
+
+test.serial("Avaturn export validates, previews and saves privately without a second click", async t => {
+  const h = await mount(t, "avaturn");
+  const exported = headerFile("avaturn.glb");
+  await act(async () => h.editor.handleAvaturnExportStart());
+  await act(async () => h.editor.acceptAvaturnFile(exported));
+  await act(async () => {
+    h.editor.handleGltfLoaded(gltfFixture());
+  });
+  await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+
+  t.deepEqual(parsedFiles, [exported]);
+  t.is(savedAvatars.length, 1);
+  t.false(savedAvatars[0].allow_promotion);
+  t.false(savedAvatars[0].allow_remixing);
 });

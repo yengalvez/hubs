@@ -60,7 +60,7 @@ function getThemeBackground() {
   return new THREE.Color(getThemeColor("background3-color") || 0xeaeaea);
 }
 
-class AvatarPreview extends Component {
+export class AvatarPreview extends Component {
   static propTypes = {
     avatarGltfUrl: PropTypes.string,
     className: PropTypes.string,
@@ -185,6 +185,9 @@ class AvatarPreview extends Component {
 
   componentDidUpdate = async oldProps => {
     if (oldProps.avatarGltfUrl !== this.props.avatarGltfUrl) {
+      // Clearing a selection must also invalidate an in-flight load. Otherwise
+      // its late callback can restore and validate a file the user discarded.
+      if (!this.props.avatarGltfUrl) this.loadId++;
       if (this.avatar) {
         this.scene.remove(this.avatar);
         this.avatar = null;

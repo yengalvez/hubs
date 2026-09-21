@@ -66,6 +66,7 @@
     ]
   },
   "dependencies": {
+    "@avaturn/sdk": "1.1.4",
     "@braintree/sanitize-url": "^6.0.0",
     "@draft-js-plugins/counter": "^4.1.2",
     "@draft-js-plugins/editor": "^4.1.3",

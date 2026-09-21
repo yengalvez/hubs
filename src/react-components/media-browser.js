@@ -20,6 +20,7 @@ import { fetchReticulumAuthenticated, getReticulumFetchUrl } from "../utils/phoe
 import { proxiedUrlFor, scaledThumbnailUrlFor } from "../utils/media-url-utils";
 import { CreateTile, MediaTile } from "./room/MediaTiles";
 import { SignInMessages } from "./auth/SignInModal";
+import { normalizeAvaturnCreatorUrl } from "../utils/avaturn-utils";
 const isMobile = AFRAME.utils.device.isMobile();
 const isThisMobileVR = AFRAME.utils.device.isMobileVR();
 
@@ -374,6 +375,10 @@ class MediaBrowserContainer extends Component {
     window.dispatchEvent(new CustomEvent("action_create_private_glb_avatar"));
   };
 
+  onCreateAvaturnAvatar = () => {
+    window.dispatchEvent(new CustomEvent("action_create_avaturn_avatar"));
+  };
+
   onShowPrivateGlbHelp = () => {
     this.props.showNonHistoriedDialog(PrivateGlbHelpModal);
   };
@@ -397,6 +402,8 @@ class MediaBrowserContainer extends Component {
     const entries = (this.state.result && this.state.result.entries) || [];
     const hideSearch = urlSource === "favorites";
     const showEmptyStringOnNoResult = urlSource !== "avatars" && urlSource !== "scenes";
+    const avaturnEnabled =
+      !!configs.feature("enable_avaturn_creator") && !!normalizeAvaturnCreatorUrl(configs.link("avaturn_creator", ""));
 
     const facets = this.state.facets && this.state.facets.length > 0 ? this.state.facets : undefined;
 
@@ -532,6 +539,14 @@ class MediaBrowserContainer extends Component {
                   icon={<AvatarIcon />}
                   label={<FormattedMessage id="media-browser.create-avatar" defaultMessage="Crear avatar" />}
                 />
+                {avaturnEnabled && (
+                  <CreateTile
+                    type="avatar"
+                    onClick={this.onCreateAvaturnAvatar}
+                    icon={<AvatarIcon />}
+                    label={<FormattedMessage id="media-browser.create-avaturn" defaultMessage="Create with Avaturn" />}
+                  />
+                )}
                 <CreateTile
                   type="avatar"
                   onClick={this.onCreatePrivateGlbAvatar}

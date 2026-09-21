@@ -7,6 +7,7 @@ import {
 } from "./utils/hub-utils";
 import "./utils/debug-log";
 import configs from "./utils/configs";
+import { normalizeAvaturnCreatorUrl } from "./utils/avaturn-utils";
 import "./utils/theme";
 
 import "core-js/stable";
@@ -889,8 +890,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     );
   };
   window.addEventListener("action_create_private_glb_avatar", createPrivateGlbAvatar);
-  // Compatibility with bookmarks or extensions that used the original vendor-specific event.
-  window.addEventListener("action_create_avaturn_avatar", createPrivateGlbAvatar);
+  window.addEventListener("action_create_avaturn_avatar", () => {
+    if (!configs.feature("enable_avaturn_creator") || !normalizeAvaturnCreatorUrl(configs.link("avaturn_creator", "")))
+      return;
+    performConditionalSignIn(
+      () => hubChannel.signedIn,
+      () => pushHistoryState(history, "overlay", "avatar-editor", { mode: "avaturn" }),
+      SignInMessages.createAvatar
+    );
+  });
 
   scene.addEventListener("scene_media_selected", e => {
     const sceneInfo = e.detail;

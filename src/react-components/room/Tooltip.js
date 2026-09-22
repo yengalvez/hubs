@@ -24,12 +24,16 @@ if (window.navigator.keyboard !== undefined && window.navigator.keyboard.getLayo
   window.navigator.keyboard
     .getLayoutMap()
     .then(function (map) {
-      moveKeyFront = `${map.get("KeyW")}`.toUpperCase();
-      moveKeyLeft = `${map.get("KeyA")}`.toUpperCase();
-      moveKeyBack = `${map.get("KeyS")}`.toUpperCase();
-      moveKeyRight = `${map.get("KeyD")}`.toUpperCase();
-      turnLeftKey = map.get("KeyQ")?.toUpperCase();
-      turnRightKey = map.get("KeyE")?.toUpperCase();
+      const keyFor = (code, fallback) => {
+        const value = map.get(code);
+        return typeof value === "string" && value.length === 1 ? value.toUpperCase() : fallback;
+      };
+      moveKeyFront = keyFor("KeyW", moveKeyFront);
+      moveKeyLeft = keyFor("KeyA", moveKeyLeft);
+      moveKeyBack = keyFor("KeyS", moveKeyBack);
+      moveKeyRight = keyFor("KeyD", moveKeyRight);
+      turnLeftKey = keyFor("KeyQ", turnLeftKey);
+      turnRightKey = keyFor("KeyE", turnRightKey);
     })
     .catch(function (e) {
       // This occurs on Chrome 93 when the Hubs page is in an iframe
@@ -228,7 +232,7 @@ function StepNavigationBar({ step, onPrev, onNext, params }) {
       <IconButton as={"span"} className={classNames(styles.arrows, !leftArrow && styles.arrowsHidden)} onClick={onPrev}>
         {"<"}
       </IconButton>
-      <div style={{ display: "flex", justifyContent: "space-between", width: "75px" }}>
+      <div className={styles.progressDots}>
         {[...Array(maxSteps(step))].map((v, i) => {
           return <span key={i} className={classNames(styles.dot, i === currentStep && styles.dotEnabled)}></span>;
         })}

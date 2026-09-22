@@ -136,6 +136,16 @@
   }
 }
 
+:local(.tall) :local(.info) > b {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  line-height: 1.35;
+  min-height: 2.7em;
+  overflow-wrap: anywhere;
+}
+
 :local(.description) {
   display: flex;
   justify-content: space-between;

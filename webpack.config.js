@@ -228,6 +228,10 @@ const dracoWasmPath = path.resolve(threeExamplesDir, "js", "libs", "draco", "glt
 
 module.exports = async (env, argv) => {
   env = env || {};
+  const devReticulumRoomId = process.env.DEV_RETICULUM_ROOM_ID;
+  if (devReticulumRoomId && !/^[A-Za-z0-9_-]+$/.test(devReticulumRoomId)) {
+    throw new Error("DEV_RETICULUM_ROOM_ID must be a simple room ID");
+  }
 
   // Load environment variables from .env files.
   // .env takes precedent over .defaults.env
@@ -384,6 +388,15 @@ module.exports = async (env, argv) => {
               secure: true,
               ws: true
             },
+            ...(devReticulumRoomId
+              ? {
+                  [`/${devReticulumRoomId}/objects.gltf`]: {
+                    target: `https://${process.env.DEV_RETICULUM_PROXY}`,
+                    changeOrigin: true,
+                    secure: true
+                  }
+                }
+              : {}),
             "/cors-proxy": {
               target: `https://cors.${process.env.DEV_RETICULUM_PROXY}`,
               changeOrigin: true,

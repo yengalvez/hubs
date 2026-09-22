@@ -13,6 +13,7 @@
   flex-direction: column;
   position: relative;
   align-items: center;
+  gap: 10px;
 
   /* TODO: This styling into AvatarPreview */
   & > :first-child {
@@ -21,14 +22,12 @@
     resizes itself to its container's dimensions.
     */
     width: 168px;
-    height: 250px;
+    height: min(200px, 28vh);
     border-radius: 8px;
-    background-color: theme.$tile-bg-color;
+    background-color: theme.$background3-color;
   }
 
   button {
-    position: absolute;
-    bottom: 0;
-    margin-bottom: 8px;
+    position: static;
   }
 }

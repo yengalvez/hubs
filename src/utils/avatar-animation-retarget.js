@@ -1,5 +1,13 @@
 import { Quaternion, Vector3 } from "three";
 
+export function isAvaturnAvatar(root) {
+  let marked = false;
+  root.traverse(node => {
+    if (node.userData?.yenhubsAnimationRig === "avaturn") marked = true;
+  });
+  return marked;
+}
+
 export function isCreatorAvatar(root) {
   let marked = false;
   root.traverse(node => {
@@ -129,4 +137,32 @@ export function retargetAvatarClip(clip, sourceBind, targetBind) {
     return result;
   });
   return result;
+}
+
+// Retain the complete authored hierarchy. Folding torso motion into clavicles
+// preserves some joint orientations, but not the deformation of chest/clothes.
+// Head/eyes remain owned by tracking; locomotion never imports root translation.
+export function retargetFullBodyClip(filtered, source, sourceBind, targetBind) {
+  const result = filtered.clone();
+  result.tracks = source.tracks.flatMap(track => {
+    if (!track.name.endsWith(".quaternion")) return [];
+    const name = track.name
+      .slice(0, -11)
+      .replace(/^.*[|:]/, "")
+      .replace(/^mixamorig[_-]?/i, "");
+    if (
+      !/^(Hips|Spine[12]?|Neck|(Left|Right)(Shoulder|Arm|ForeArm|Hand(?:Thumb|Index|Middle|Ring|Pinky)?[123]?|UpLeg|Leg|Foot|ToeBase))$/.test(
+        name
+      )
+    )
+      return [];
+    if (!sourceBind.has(name) || !targetBind.has(name)) return [];
+    const copy = track.clone();
+    copy.name = `${name}.quaternion`;
+    return [copy];
+  });
+  // Sitting alone supplies a height track; the caller scales it to this avatar.
+  const height = filtered.tracks.find(track => track.name === "Hips.position");
+  if (height) result.tracks.push(height.clone());
+  return retargetAvatarClip(result, sourceBind, alignAvatarArmReference(sourceBind, targetBind));
 }

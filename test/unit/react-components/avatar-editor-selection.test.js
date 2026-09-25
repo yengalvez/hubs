@@ -161,6 +161,9 @@ async function mount(t, mode = "private-glb", onSave) {
     get error() {
       return container.querySelector(".error-text")?.textContent;
     },
+    get guide() {
+      return container.querySelector(".private-glb-guide");
+    },
     async select(file) {
       const input = container.querySelector('input[type="file"]');
       Object.defineProperty(input, "files", { configurable: true, value: file ? [file] : [] });
@@ -177,6 +180,13 @@ async function mount(t, mode = "private-glb", onSave) {
     }
   };
 }
+
+test.serial("private GLB upload contains its own expandable guide", async t => {
+  const h = await mount(t);
+  t.truthy(h.guide);
+  t.regex(h.guide.querySelector("summary").textContent, /GLB guide and requirements/);
+  t.regex(h.guide.textContent, /My Avatars/);
+});
 
 for (const kind of ["corrupt", "oversized"]) {
   test.serial(`valid then ${kind} GLB cannot leave Save enabled`, async t => {

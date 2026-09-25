@@ -2,6 +2,7 @@ import { defineQuery } from "bitecs";
 import { CameraTool } from "../bit-components";
 import { waitForDOMContentLoaded } from "../utils/async-utils";
 import { isCreatorAvatar } from "../utils/avatar-animation-retarget";
+import { alignTrackedAvatarHead, createTrackedHeadState } from "../utils/avatar-tracked-head";
 const { Vector3, Quaternion, Matrix4, Euler } = THREE;
 
 function quaternionAlmostEquals(epsilon, u, v) {
@@ -122,6 +123,7 @@ AFRAME.registerComponent("ik-controller", {
     this._hasSittingPositionLock = false;
     this._sittingLockedPosition = new Vector3();
     this._hasInjectedEyes = false;
+    this._trackedHeadState = createTrackedHeadState();
 
     this.ikRoot = findIKRoot(this.el);
 
@@ -380,6 +382,7 @@ AFRAME.registerComponent("ik-controller", {
       if (rightHand) this.updateHand(HAND_ROTATIONS.right, rightHand, rightController.object3D, false, this.isInView);
     }
     this.forceIkUpdate = false;
+    this.alignAnimatedHead();
 
     if (!this._hadFirstTick) {
       // Ensure the avatar is not shown until we've done our first IK step, to prevent seeing mis-oriented/t-pose pose or our own avatar at the wrong place.
@@ -387,6 +390,28 @@ AFRAME.registerComponent("ik-controller", {
       this._hadFirstTick = true;
       this.el.emit("ik-first-tick");
     }
+  },
+
+  alignAnimatedHead() {
+    if (!this.el.components["fullbody-locomotion"]?._usesAnimatedTorso || !this.ikRoot || !this.head) return;
+    const camera = this.ikRoot.camera.object3D;
+    camera.updateMatrix();
+    this.cameraForward.multiplyMatrices(camera.matrix, this.flipY);
+    // The eye offsets live in bone units, while the camera uses tracking-root
+    // units. Include uniform avatar sizing when anchoring a complete skeleton.
+    this.head.getWorldScale(this._tmpPosA);
+    this.ikRoot.el.object3D.getWorldScale(this._tmpPosB);
+    this._tmpPosA.divide(this._tmpPosB).multiply(this.middleEyePosition).negate();
+    this.middleEyeMatrix.makeTranslation(this._tmpPosA.x, this._tmpPosA.y, this._tmpPosA.z);
+    this.headTransform.multiplyMatrices(this.cameraForward, this.middleEyeMatrix);
+    alignTrackedAvatarHead(
+      this.avatar,
+      this.head,
+      this.ikRoot.el.object3D,
+      this.headTransform,
+      this._trackedHeadState,
+      this._lastIsSitting
+    );
   },
 
   updateHand(handRotation, handObject3D, controllerObject3D, isLeft, isInView) {

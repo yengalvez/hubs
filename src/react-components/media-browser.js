@@ -8,17 +8,15 @@ import { showFullScreenIfWasFullScreen } from "../utils/fullscreen";
 import { AvatarUrlModalContainer } from "./room/AvatarUrlModalContainer";
 import { SceneUrlModalContainer } from "./room/SceneUrlModalContainer";
 import { ObjectUrlModalContainer } from "./room/ObjectUrlModalContainer";
-import { PrivateGlbHelpModal } from "./room/PrivateGlbHelpModal";
 import { MediaBrowser } from "./room/MediaBrowser";
 import { IconButton } from "./input/IconButton";
 import { ReactComponent as UploadIcon } from "./icons/Upload.svg";
 import { ReactComponent as LinkIcon } from "./icons/Link.svg";
-import { ReactComponent as AvatarIcon } from "./icons/Avatar.svg";
-import { ReactComponent as HelpIcon } from "./icons/Help.svg";
+import { ReactComponent as AvaturnIcon } from "./icons/Avaturn.svg";
 import { remixAvatar } from "../utils/avatar-utils";
 import { fetchReticulumAuthenticated, getReticulumFetchUrl } from "../utils/phoenix-utils";
 import { proxiedUrlFor, scaledThumbnailUrlFor } from "../utils/media-url-utils";
-import { CreateTile, MediaTile } from "./room/MediaTiles";
+import { AvatarActionRow, CreateTile, MediaTile } from "./room/MediaTiles";
 import { SignInMessages } from "./auth/SignInModal";
 import { normalizeAvaturnCreatorUrl } from "../utils/avaturn-utils";
 const isMobile = AFRAME.utils.device.isMobile();
@@ -367,20 +365,12 @@ class MediaBrowserContainer extends Component {
     );
   };
 
-  onCreateAvatar = () => {
-    window.dispatchEvent(new CustomEvent("action_create_avatar"));
-  };
-
   onCreatePrivateGlbAvatar = () => {
     window.dispatchEvent(new CustomEvent("action_create_private_glb_avatar"));
   };
 
   onCreateAvaturnAvatar = () => {
     window.dispatchEvent(new CustomEvent("action_create_avaturn_avatar"));
-  };
-
-  onShowPrivateGlbHelp = () => {
-    this.props.showNonHistoriedDialog(PrivateGlbHelpModal);
   };
 
   processThumbnailUrl = (entry, thumbnailWidth, thumbnailHeight) => {
@@ -518,6 +508,7 @@ class MediaBrowserContainer extends Component {
         }
         hasNext={hasNext}
         hasPrevious={hasPrevious}
+        centerActions={urlSource === "avatars" && entries.length === 0}
         onNextPage={() => this.handlePager(1)}
         onPreviousPage={() => this.handlePager(-1)}
         noResultsMessage={
@@ -532,18 +523,13 @@ class MediaBrowserContainer extends Component {
         !showEmptyStringOnNoResult ? (
           <>
             {urlSource === "avatars" && (
-              <>
-                <CreateTile
-                  type="avatar"
-                  onClick={this.onCreateAvatar}
-                  icon={<AvatarIcon />}
-                  label={<FormattedMessage id="media-browser.create-avatar" defaultMessage="Crear avatar" />}
-                />
+              <AvatarActionRow>
                 {avaturnEnabled && (
                   <CreateTile
                     type="avatar"
                     onClick={this.onCreateAvaturnAvatar}
-                    icon={<AvatarIcon />}
+                    icon={<AvaturnIcon />}
+                    tone="avaturn"
                     label={<FormattedMessage id="media-browser.create-avaturn" defaultMessage="Create with Avaturn" />}
                   />
                 )}
@@ -552,18 +538,9 @@ class MediaBrowserContainer extends Component {
                   onClick={this.onCreatePrivateGlbAvatar}
                   icon={<UploadIcon />}
                   tone="upload"
-                  label={
-                    <FormattedMessage id="media-browser.create-private-glb" defaultMessage="Upload GLB (private)" />
-                  }
+                  label={<FormattedMessage id="media-browser.create-private-glb" defaultMessage="Upload GLB" />}
                 />
-                <CreateTile
-                  type="avatar"
-                  onClick={this.onShowPrivateGlbHelp}
-                  icon={<HelpIcon />}
-                  tone="help"
-                  label={<FormattedMessage id="media-browser.private-glb-help" defaultMessage="GLB guide" />}
-                />
-              </>
+              </AvatarActionRow>
             )}
             {urlSource === "scenes" && configs.feature("enable_spoke") && (
               <CreateTile

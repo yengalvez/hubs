@@ -747,15 +747,51 @@ class AvatarEditor extends Component {
                         disabled={this.state.uploading}
                       />
                     ) : (
-                      this.fileField(
-                        "glb",
-                        intl.formatMessage({
-                          id: "avatar-editor.field.private-glb",
-                          defaultMessage: "Custom GLB file"
-                        }),
-                        "model/gltf+binary,.glb",
-                        this.state.uploading
-                      )
+                      <>
+                        {this.fileField(
+                          "glb",
+                          intl.formatMessage({
+                            id: "avatar-editor.field.private-glb",
+                            defaultMessage: "Custom GLB file"
+                          }),
+                          "model/gltf+binary,.glb",
+                          this.state.uploading
+                        )}
+                        <details className="private-glb-guide">
+                          <summary>
+                            <FormattedMessage
+                              id="avatar-editor.private-glb-guide"
+                              defaultMessage="GLB guide and requirements"
+                            />
+                          </summary>
+                          <ol>
+                            <li>
+                              <FormattedMessage
+                                id="private-glb-help-modal.step-1"
+                                defaultMessage="Create or export a compatible avatar from the tool of your choice in .glb format."
+                              />
+                            </li>
+                            <li>
+                              <FormattedMessage
+                                id="private-glb-help-modal.step-3"
+                                defaultMessage="Enter a name, select the .glb file and save it."
+                              />
+                            </li>
+                            <li>
+                              <FormattedMessage
+                                id="private-glb-help-modal.step-4"
+                                defaultMessage="Select the avatar from My Avatars to use it in the room."
+                              />
+                            </li>
+                          </ol>
+                          <p>
+                            <FormattedMessage
+                              id="private-glb-help-modal.note"
+                              defaultMessage="This flow does not publish the avatar in featured listings. Review the license and privacy terms of the tool used to create it separately."
+                            />
+                          </p>
+                        </details>
+                      </>
                     )}
                     {this.state.uploadError && <p className="error-text">{this.state.uploadError}</p>}
                     {isAvaturnMode && this.state.avaturnSaveState === "saving" && (

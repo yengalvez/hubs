@@ -1,14 +1,16 @@
 import { Matrix4, Quaternion, Vector3 } from "three";
 
 // Desktop Hubs positions its viewpoint 1.6m above a floor waypoint. Match the
-// bundled creator's head reference to that convention instead of translating a
+// bundled creator's head (or Avaturn's real eyes) to that convention instead of translating a
 // short model upward (which leaves its feet and sitting pose floating).
 // This runs before skin binding/inflation, uniformly scaling meshes AND joints.
 export function normalizeCreatorHeight(json) {
-  if (!json.nodes.some(n => n.extras?.yenhubsCreatorRig === "makehuman-mixamo-v1")) return;
+  const avaturn = /\bAvaturn\b/i.test(json.asset?.generator || "");
+  if (!avaturn && !json.nodes.some(n => n.extras?.yenhubsCreatorRig === "makehuman-mixamo-v1")) return;
   const scene = json.scenes[json.scene || 0];
   if (scene.nodes.length !== 1) return;
   let headHeight;
+  const eyeHeights = [];
   const walk = (index, parent) => {
     const node = json.nodes[index];
     const local = node.matrix
@@ -20,9 +22,11 @@ export function normalizeCreatorHeight(json) {
         );
     const world = parent.clone().multiply(local);
     if (node.name === "Head") headHeight = world.elements[13];
+    if (node.name === "LeftEye" || node.name === "RightEye") eyeHeights.push(world.elements[13]);
     for (const child of node.children || []) walk(child, world);
   };
   walk(scene.nodes[0], new Matrix4());
+  if (avaturn && eyeHeights.length === 2) headHeight = (eyeHeights[0] + eyeHeights[1]) / 2;
   if (!Number.isFinite(headHeight) || headHeight < 0.8 || headHeight > 2.5) return;
   const root = json.nodes[scene.nodes[0]],
     factor = 1.6 / headHeight;

@@ -117,6 +117,13 @@ export function ensureAvatarNodes(json) {
   normalizeHumanoidNodeNames();
   normalizeCreatorHeight(json);
 
+  // Preserve verified exporter provenance across Hubs' Group/Bone inflation.
+  // Do not select this path by an avatar id or a generic T-pose heuristic.
+  if (/\bAvaturn\b/i.test(json.asset?.generator || "")) {
+    const hips = nodes.find(node => node.name === "Hips");
+    if (hips) hips.extras = { ...hips.extras, yenhubsAnimationRig: "avaturn" };
+  }
+
   if (!nodes.some(node => node.name === "AvatarRoot")) {
     // Note: We assume that the first node in the primary scene is the one we care about.
     const originalRoot = json.scenes[json.scene].nodes[0];

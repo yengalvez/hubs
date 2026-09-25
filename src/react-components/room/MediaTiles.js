@@ -109,7 +109,7 @@ export function CreateTile({ label, type, icon, tone, ...rest }) {
     <BaseTile
       className={classNames(styles.createTile, {
         [styles.createTileUpload]: tone === "upload",
-        [styles.createTileHelp]: tone === "help"
+        [styles.createTileAvaturn]: tone === "avaturn"
       })}
       wide={type === "scene"}
       {...rest}
@@ -126,7 +126,15 @@ CreateTile.propTypes = {
   label: PropTypes.node,
   type: PropTypes.string,
   icon: PropTypes.node,
-  tone: PropTypes.oneOf(["upload", "help"])
+  tone: PropTypes.oneOf(["upload", "avaturn"])
+};
+
+export function AvatarActionRow({ children }) {
+  return <div className={styles.avatarActionRow}>{children}</div>;
+}
+
+AvatarActionRow.propTypes = {
+  children: PropTypes.node
 };
 
 export function MediaTile({ entry, processThumbnailUrl, onClick, onEdit, onShowSimilar, onCopy, onInfo, ...rest }) {

@@ -10,7 +10,7 @@
   align-content: flex-start;
   flex: 1;
 
-  @media(min-width: theme.$breakpoint-lg) {
+  @media (min-width: theme.$breakpoint-lg) {
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
 
@@ -23,13 +23,17 @@
 :local(.sm) {
   grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
 
-  @media(min-width: theme.$breakpoint-lg) {
+  @media (min-width: theme.$breakpoint-lg) {
     grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   }
 }
 
 :local(.center) {
   justify-content: space-evenly;
+}
+
+:local(.center-content) {
+  align-content: center;
 }
 
 :local(.variable-width) {

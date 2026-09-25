@@ -18,9 +18,14 @@
   border: 1px solid theme.$tile-button-border-color;
   border-radius: var(--mv-radius-md);
   box-shadow: var(--mv-shadow-1);
-  transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease;
+  transition:
+    transform 170ms ease,
+    border-color 170ms ease,
+    box-shadow 170ms ease;
 
-  img, video, :local(.create-tile-content) {
+  img,
+  video,
+  :local(.create-tile-content) {
     border-radius: var(--mv-radius-md);
     width: 100%;
     height: 100%;
@@ -30,7 +35,9 @@
   &:hover {
     background-color: theme.$tile-bg-color-hover;
     border-color: var(--mv-border-strong);
-    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.4), var(--mv-glow);
+    box-shadow:
+      0 18px 42px rgba(0, 0, 0, 0.4),
+      var(--mv-glow);
     transform: translateY(-3px);
   }
 
@@ -39,10 +46,13 @@
   }
 }
 
-:local(.tall) :local(.thumbnail-container), :local(.wide) :local(.thumbnail-container){
+:local(.tall) :local(.thumbnail-container),
+:local(.wide) :local(.thumbnail-container) {
   height: 0;
 
-  img, video, :local(.create-tile-content) {
+  img,
+  video,
+  :local(.create-tile-content) {
     position: absolute;
     top: 0;
     left: 0;
@@ -78,7 +88,8 @@
   margin-bottom: 0;
 }
 
-:local(.tile-action), :local(.member-count) {
+:local(.tile-action),
+:local(.member-count) {
   background: rgba(20, 34, 60, 1);
   color: theme.$tile-button-text-color;
   height: 30px;
@@ -226,12 +237,36 @@
   }
 }
 
-:local(.create-tile-help) {
+:local(.create-tile-avaturn) {
   :local(.thumbnail-container) {
-    background: linear-gradient(145deg, rgba(44, 49, 100, 0.95), rgba(14, 18, 48, 0.99));
+    background:
+      radial-gradient(circle at 50% 15%, rgba(125, 116, 255, 0.32), transparent 64%),
+      linear-gradient(145deg, rgba(43, 48, 109, 0.98), rgba(13, 25, 61, 0.99));
   }
 
   :local(.create-tile-content) svg {
-    color: #9eb4ff;
+    width: 42px;
+    height: 42px;
+    color: #b5c3ff;
+  }
+}
+
+:local(.avatar-action-row) {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 18px;
+  width: 100%;
+  margin: 6px 0 16px;
+
+  > * {
+    width: min(100%, 238px);
+    height: 180px;
+  }
+
+  :local(.create-tile-content) p {
+    font-size: 15px;
   }
 }

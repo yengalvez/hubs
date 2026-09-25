@@ -3,12 +3,21 @@ import {
   alignAvatarArmReference,
   captureAvatarBind,
   restoreCreatorHandTracks,
+  retargetFullBodyClip,
   retargetAvatarClip
 } from "./avatar-animation-retarget";
 import { compensateOmittedAnimationParents } from "./avatar-animation-parent-compensation";
+import { retractAvatarShoulders } from "./avatar-shoulder-posture";
 
 const clipBinds = new WeakMap();
 const clipSources = new WeakMap();
+
+export function adaptSharedClipToAvaturn(clip, targetBind) {
+  const sourceBind = clipBinds.get(clip);
+  const source = clipSources.get(clip);
+  if (!sourceBind || !source) throw new Error("Missing source animation bind pose");
+  return retractAvatarShoulders(retargetFullBodyClip(clip, source, sourceBind, targetBind), targetBind);
+}
 
 export function adaptSharedClipToCreator(clip, targetBind) {
   const sourceBind = clipBinds.get(clip);
@@ -23,6 +32,33 @@ export function adaptSharedClipToCreator(clip, targetBind) {
   return retargetAvatarClip(compensated, sourceBind, alignAvatarArmReference(sourceBind, targetBind));
 }
 
+// Adapt the existing arm chain; Avaturn full-body compatibility remains
+// unaccepted until its complete pose matches the original provider reference.
+export function adaptSharedClipArmsToAvatar(clip, targetBind) {
+  const sourceBind = clipBinds.get(clip);
+  const source = clipSources.get(clip);
+  if (!sourceBind || !source) throw new Error("Missing source animation bind pose");
+  const compensated = compensateOmittedAnimationParents(clip, source, sourceBind);
+  const isArmTrack = name => /^(Left|Right)(Shoulder|Arm|ForeArm)\.quaternion$/.test(name);
+  const armsOnly = compensated.clone();
+  armsOnly.tracks = compensated.tracks.filter(
+    track => isArmTrack(track.name) && targetBind.has(track.name.split(".")[0])
+  );
+  const adapted = retargetAvatarClip(armsOnly, sourceBind, alignAvatarArmReference(sourceBind, targetBind));
+  const armTracks = new Map(adapted.tracks.map(track => [track.name, track]));
+  const result = clip.clone();
+  result.tracks = clip.tracks.map(track => {
+    if (!isArmTrack(track.name)) return track.clone();
+    const bone = track.name.split(".")[0];
+    if (!targetBind.has(bone)) return track.clone();
+    const targetName = `${targetBind.get(bone).nodeName || bone}.quaternion`;
+    const adaptedTrack = armTracks.get(targetName);
+    if (!adaptedTrack) throw new Error(`Missing retargeted arm animation track: ${targetName}`);
+    return adaptedTrack.clone();
+  });
+  return result;
+}
+
 import idleGlbUrl from "../assets/animations/mixamo/idle.glb";
 import walkGlbUrl from "../assets/animations/mixamo/walk.glb";
 import walkBackwardsGlbUrl from "../assets/animations/mixamo/walk-backwards.glb";
@@ -30,7 +66,7 @@ import walkStrafeLeftGlbUrl from "../assets/animations/mixamo/walk-strafe-left.g
 import walkStrafeRightGlbUrl from "../assets/animations/mixamo/walk-strafe-right.glb";
 import sitGlbUrl from "../assets/animations/mixamo/sit.glb";
 
-// For locomotion, we deliberately avoid hips/spine/neck/head and any translations so we don't
+// For player locomotion, we deliberately avoid hips/spine/neck/head and translations so we don't
 // fight ik-controller's head-offset math (which assumes a mostly-static head chain).
 // The goal is "looks alive while moving" without risking avatar/camera alignment bugs.
 const LOCOMOTION_BONES = new Set([
@@ -113,10 +149,9 @@ function filterAndRetargetClip(clip, allowedBones, opts = {}) {
       continue;
     }
 
-    // Locomotion explicitly avoids translations (root motion and bone position) to prevent
-    // fighting IK and camera alignment. Sitting is a special case: the Mixamo "Stand To Sit"
-    // clip uses a vertical Hips.position track to lower the body into the chair pose. If we
-    // drop that translation, the avatar looks like it "floats" while sitting.
+    // Player locomotion avoids translations (root motion and bone position) to prevent
+    // fighting IK and camera alignment. Sitting needs vertical Hips.position to lower the
+    // body; the bot-only walk also uses a reduced vertical component for foot contact.
     if (opts.allowHipsPositionY && property === "position" && nodeName === "Hips") {
       const cloned = track.clone();
       cloned.name = "Hips.position";
@@ -165,6 +200,12 @@ export async function getSharedMixamoLocomotionClips() {
     const walk = filterAndRetargetClip(walkClipRaw, LOCOMOTION_BONES);
     walk.name = "mixamo-walk";
 
+    // Bots have no player camera tied to their hips. Keep the source walk's
+    // vertical pelvis rhythm available for their shorter, slower visual step;
+    // regular avatars continue to use the translation-free clip above.
+    const walkBot = filterAndRetargetClip(walkClipRaw, LOCOMOTION_BONES, { allowHipsPositionY: true });
+    walkBot.name = "mixamo-walk-bot";
+
     const walkBack = filterAndRetargetClip(walkBackClipRaw, LOCOMOTION_BONES);
     walkBack.name = "mixamo-walk-back";
 
@@ -177,7 +218,7 @@ export async function getSharedMixamoLocomotionClips() {
     const sit = filterAndRetargetClip(sitClipRaw, SITTING_BONES, { allowHipsPositionY: true });
     sit.name = "mixamo-sit";
 
-    return { idle, walk, walkBack, strafeLeft, strafeRight, sit };
+    return { idle, walk, walkBot, walkBack, strafeLeft, strafeRight, sit };
   })();
 
   return locomotionPromise;

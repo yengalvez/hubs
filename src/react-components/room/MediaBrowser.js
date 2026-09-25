@@ -46,6 +46,7 @@ export function MediaBrowser({
   headerRight,
   hasNext,
   hasPrevious,
+  centerActions,
   onNextPage,
   onPreviousPage,
   noResultsMessage,
@@ -126,6 +127,7 @@ export function MediaBrowser({
             <MediaGrid
               isVariableWidth={selectedSource === "gifs" || selectedSource === "images"}
               sm={selectedSource === "avatars"}
+              centerContent={centerActions}
             >
               {children}
             </MediaGrid>
@@ -168,6 +170,7 @@ MediaBrowser.propTypes = {
   headerRight: PropTypes.node,
   hasNext: PropTypes.bool,
   hasPrevious: PropTypes.bool,
+  centerActions: PropTypes.bool,
   onNextPage: PropTypes.func,
   onPreviousPage: PropTypes.func,
   noResultsMessage: PropTypes.node,

@@ -3,12 +3,17 @@ import PropTypes from "prop-types";
 import classNames from "classnames";
 import styles from "./MediaGrid.scss";
 
-export function MediaGrid({ children, className, center, isVariableWidth, sm, ...rest }) {
+export function MediaGrid({ children, className, center, centerContent, isVariableWidth, sm, ...rest }) {
   return (
     <div
       className={classNames(
         styles.mediaGrid,
-        { [styles.center]: center, [styles.variableWidth]: isVariableWidth, [styles.sm]: sm },
+        {
+          [styles.center]: center,
+          [styles.centerContent]: centerContent,
+          [styles.variableWidth]: isVariableWidth,
+          [styles.sm]: sm
+        },
         className
       )}
       {...rest}
@@ -20,6 +25,7 @@ export function MediaGrid({ children, className, center, isVariableWidth, sm, ..
 
 MediaGrid.propTypes = {
   center: PropTypes.bool,
+  centerContent: PropTypes.bool,
   isVariableWidth: PropTypes.bool,
   sm: PropTypes.bool,
   className: PropTypes.string,

@@ -12,11 +12,16 @@
  * - Only touches lower-body bones.
  */
 
-import { getSharedMixamoLocomotionClips, adaptSharedClipToCreator } from "../utils/mixamo-shared-animations";
-import { captureAvatarBind, isCreatorAvatar } from "../utils/avatar-animation-retarget";
+import {
+  getSharedMixamoLocomotionClips,
+  adaptSharedClipToCreator,
+  adaptSharedClipToAvaturn
+} from "../utils/mixamo-shared-animations";
+import { captureAvatarBind, isCreatorAvatar, isAvaturnAvatar } from "../utils/avatar-animation-retarget";
 import { fitCreatorJackets } from "../utils/avatar-creator-garment-fit";
 import { avatarLocomotionDirection } from "../utils/avatar-locomotion-direction";
 import { measureCreatorSeatContact } from "../utils/avatar-seat-contact";
+import { shortenBotWalkStride, addBotWalkHipMotion, botWalkCycleTimeScale } from "../utils/bot-walk-gait";
 
 const { Vector3, MathUtils } = THREE;
 
@@ -109,15 +114,31 @@ AFRAME.registerComponent("fullbody-locomotion", {
       if (!root) return;
       // Capture before the asynchronous load: fallback ticks can otherwise
       // change the legs and contaminate the supposed rest-pose reference.
-      const targetBind = isCreatorAvatar(root) ? captureAvatarBind(root) : null;
-      if (targetBind) fitCreatorJackets(root);
-      let { idle, walk, walkBack, strafeLeft, strafeRight, sit } = await getSharedMixamoLocomotionClips();
+      const creatorRig = isCreatorAvatar(root);
+      const avaturnRig = !this.data.forceForward && isAvaturnAvatar(root);
+      const targetBind = creatorRig || avaturnRig ? captureAvatarBind(root) : null;
+      if (creatorRig) fitCreatorJackets(root);
+      const clips = await getSharedMixamoLocomotionClips();
+      let { idle, walk, walkBack, strafeLeft, strafeRight, sit } = clips;
       if (this._destroyed) return;
 
-      if (targetBind) {
+      if (this.data.forceForward) walk = clips.walkBot || walk;
+
+      if (creatorRig) {
         [idle, walk, walkBack, strafeLeft, strafeRight, sit] = [idle, walk, walkBack, strafeLeft, strafeRight, sit].map(
           clip => adaptSharedClipToCreator(clip, targetBind)
         );
+      } else if (avaturnRig) {
+        [idle, walk, walkBack, strafeLeft, strafeRight, sit] = [idle, walk, walkBack, strafeLeft, strafeRight, sit].map(
+          clip => adaptSharedClipToAvaturn(clip, targetBind)
+        );
+      }
+
+      if (this.data.forceForward) {
+        // Bots travel at much lower navmesh speeds than the source clip. Keep
+        // the shorter leg stride and softer arm swing local to their rigs.
+        walk = shortenBotWalkStride(walk, idle);
+        walk = addBotWalkHipMotion(walk, root);
       }
 
       // Mixamo exports "Hips.position" in centimeters-like units (e.g. ~103 at standing height).
@@ -181,6 +202,7 @@ AFRAME.registerComponent("fullbody-locomotion", {
       this._shared.mixer = mixer;
       this._shared.actions = actions;
       this._shared.ready = true;
+      this._usesAnimatedTorso = avaturnRig;
 
       this.playSharedAction("idle", 0);
     } catch (e) {
@@ -219,7 +241,11 @@ AFRAME.registerComponent("fullbody-locomotion", {
 
     const isSitting = this.getIsSitting();
 
-    root.getWorldPosition(this._tmpPos);
+    // Head anchoring moves the visual root as the torso breathes. Measure the
+    // tracked player instead, otherwise an idle sway can trigger a walk cycle.
+    const ik = this.el.components["ik-controller"];
+    const movementRoot = this._usesAnimatedTorso && ik?.ikRoot?.el?.object3D;
+    (movementRoot || root).getWorldPosition(this._tmpPos);
 
     if (!this._hadFirstTick) {
       this._prevPos.copy(this._tmpPos);
@@ -237,6 +263,7 @@ AFRAME.registerComponent("fullbody-locomotion", {
 
     if (this.data.useSharedAnimations && this._shared.ready && this._shared.mixer && this._shared.actions) {
       this._shared.mixer.update(dtSeconds);
+      if (this._usesAnimatedTorso) ik?.alignAnimatedHead();
 
       if (isSitting) {
         if (this._shared.current !== "sit") {
@@ -270,9 +297,13 @@ AFRAME.registerComponent("fullbody-locomotion", {
         this.playSharedAction(target, 0.12);
       }
 
-      // Scale the walk cycle speed loosely with movement speed to reduce moonwalking.
+      // Bots must advance one visual stride for the distance actually travelled.
+      // The old 0.6 minimum made a slow patrol take steps too quickly.
       if (moving && target !== "idle" && this._shared.actions[target]) {
-        this._shared.actions[target].timeScale = MathUtils.clamp(speed / 1.4, 0.6, 2.2);
+        this._shared.actions[target].timeScale =
+          this.data.forceForward && target === "walk"
+            ? botWalkCycleTimeScale(speed, this._shared.actions[target].getClip().duration)
+            : MathUtils.clamp(speed / 1.4, 0.6, 2.2);
       } else if (this._shared.actions.idle) {
         this._shared.actions.idle.timeScale = 1.0;
       }

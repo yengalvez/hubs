@@ -1,5 +1,5 @@
 @use "../../react-components/styles/theme.scss";
-@import 'shared';
+@import "shared";
 
 :local(.avatar-editor) {
   padding: 2em;
@@ -83,6 +83,36 @@
       margin-bottom: 10px;
     }
 
+    .private-glb-guide {
+      max-width: 560px;
+      padding: 11px 14px;
+      border: 1px solid theme.$border1-color;
+      border-radius: 12px;
+      background: rgba(20, 33, 58, 0.8);
+      color: theme.$text2-color;
+      font-size: 13px;
+      line-height: 1.5;
+
+      summary {
+        color: theme.$text1-color;
+        font-weight: theme.$font-weight-bold;
+        cursor: pointer;
+      }
+
+      ol {
+        margin: 12px 0;
+        padding-left: 20px;
+      }
+
+      li + li {
+        margin-top: 6px;
+      }
+
+      p {
+        margin: 0;
+      }
+    }
+
     > .text-field-container {
       display: flex;
       align-items: center;
@@ -94,7 +124,7 @@
     .file-input-row {
       display: flex;
       align-items: center;
-      &.disabled{
+      &.disabled {
         opacity: 0.5;
       }
       label {
@@ -147,7 +177,7 @@
 
     .select-container {
       position: relative;
-      .arrow{
+      .arrow {
         position: absolute;
         right: 10px;
         bottom: 20px;
@@ -192,7 +222,7 @@
           background: theme.$tile-bg-color-pressed;
         }
 
-        &.custom{
+        &.custom {
           width: 100%;
           height: 40px;
 
@@ -219,7 +249,6 @@
       -moz-appearance: none;
     }
 
-
     .checkbox-container {
       display: flex;
       align-items: center;
@@ -243,7 +272,7 @@
       .checkbox:checked {
         position: relative;
         &::after {
-          content: ' ';
+          content: " ";
           position: absolute;
           background: theme.$active-color;
           top: 0.3em;
@@ -300,30 +329,65 @@
   }
 
   &.creator-mode {
-    .form-body { min-width: 0; }
+    .form-body {
+      min-width: 0;
+    }
     fieldset {
       min-width: 0;
-      select, button, input[type="color"] {
+      select,
+      button,
+      input[type="color"] {
         color: theme.$text1-color;
         background: var(--mv-surface-solid, #0b162a);
         border: 1px solid theme.$input-border-color;
         border-radius: 8px;
         font: inherit;
       }
-      select { min-height: 44px; }
-      option { color: theme.$text1-color; background: var(--mv-surface-solid, #0b162a); }
-      button { min-height: 44px; padding: 8px 12px; cursor: pointer; }
-      [role="group"] { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-      select:focus-visible, button:focus-visible, input:focus-visible {
+      select {
+        min-height: 44px;
+      }
+      option {
+        color: theme.$text1-color;
+        background: var(--mv-surface-solid, #0b162a);
+      }
+      button {
+        min-height: 44px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      [role="group"] {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 8px 0;
+      }
+      select:focus-visible,
+      button:focus-visible,
+      input:focus-visible {
         outline: 2px solid theme.$primary-color;
         outline-offset: 2px;
       }
-      select:disabled, button:disabled { opacity: 0.6; cursor: default; }
+      select:disabled,
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
     }
     @media (max-width: 600px) {
-      .split { grid-template: auto auto / minmax(0, 1fr); width: 100%; }
-      .preview { grid-row: 1; width: 100%; max-width: none; height: 300px; margin: 0 0 1em; }
-      .center { width: 100%; }
+      .split {
+        grid-template: auto auto / minmax(0, 1fr);
+        width: 100%;
+      }
+      .preview {
+        grid-row: 1;
+        width: 100%;
+        max-width: none;
+        height: 300px;
+        margin: 0 0 1em;
+      }
+      .center {
+        width: 100%;
+      }
     }
   }
 

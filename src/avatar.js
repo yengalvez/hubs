@@ -11,12 +11,11 @@ import classNames from "classnames";
 import { FormattedMessage } from "react-intl";
 import { WrappedIntlProvider } from "./react-components/wrapped-intl-provider";
 
-import configs from "./utils/configs";
-
 import { disableiOSZoom } from "./utils/disable-ios-zoom";
 disableiOSZoom();
 
 import AvatarPreview from "./react-components/avatar-preview";
+import { AvatarPageLogo } from "./react-components/avatar-page-logo";
 
 import { fetchAvatar, remixAvatar } from "./utils/avatar-utils";
 
@@ -133,11 +132,7 @@ class AvatarPage extends React.Component {
             </button>
           )}
         </div>
-        <img
-          className={styles.logo}
-          src={configs.image("logo")}
-          alt={<FormattedMessage id="avatar-page.logo" defaultMessage="Logo" />}
-        />
+        <AvatarPageLogo className={styles.logo} />
       </form>
     );
   }

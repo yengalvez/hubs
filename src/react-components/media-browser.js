@@ -596,6 +596,7 @@ class MediaBrowserContainer extends Component {
                 <MediaTile
                   key={`${entry.id}_${idx}`}
                   entry={entry}
+                  thumbnailLoading={idx < 6 ? "eager" : "lazy"}
                   processThumbnailUrl={this.processThumbnailUrl}
                   onClick={e => this.handleEntryClicked(e, entry)}
                   onEdit={onEdit}

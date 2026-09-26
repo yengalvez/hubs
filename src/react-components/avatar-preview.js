@@ -8,9 +8,13 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 import { createDefaultEnvironmentMap } from "../components/environment-map";
 import { loadGLTF } from "../components/gltf-model-plus";
-import { disposeNode, findNode } from "../utils/three-utils";
+import { findNode } from "../utils/three-utils";
 import { ensureAvatarMaterial, MAT_NAME } from "../utils/avatar-utils";
-import { fitAvatarPreviewCamera, getAvatarPreviewBounds } from "../utils/avatar-preview-bounds";
+import {
+  fitAvatarPreviewCamera,
+  getAvatarPreviewBounds,
+  resizeAvatarPreviewCamera
+} from "../utils/avatar-preview-bounds";
 import { fitCreatorJackets } from "../utils/avatar-creator-garment-fit";
 import { createImageBitmap, disposeImageBitmap } from "../utils/image-bitmap-utils";
 import { proxiedUrlFor } from "../utils/media-url-utils";
@@ -72,7 +76,8 @@ export class AvatarPreview extends Component {
     super(props);
     this.state = { loading: true, error: null };
     this.avatar = null;
-    this.imageBitmaps = {};
+    this.previewLoads = new Map();
+    this.disposedAvatars = new WeakSet();
     this.mounted = false;
   }
 
@@ -128,9 +133,9 @@ export class AvatarPreview extends Component {
   resize = () => {
     const width = this.canvas.parentElement.offsetWidth;
     const height = this.canvas.parentElement.offsetHeight;
+    if (width <= 0 || height <= 0) return;
     this.previewRenderer.setSize(width, height);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    resizeAvatarPreviewCamera(this.camera, this.previewBounds, this.controls.target, width / height);
   };
 
   setAvatar = avatar => {
@@ -146,6 +151,7 @@ export class AvatarPreview extends Component {
     const center = new THREE.Vector3();
     return () => {
       getAvatarPreviewBounds(this.avatar, box);
+      this.previewBounds = box.clone();
       box.getCenter(center);
 
       // Shift the center vertically in order to frame the avatar nicely.
@@ -161,13 +167,15 @@ export class AvatarPreview extends Component {
 
   componentWillUnmount = () => {
     this.mounted = false;
+    this.loadId++;
 
     // Gotta be particularly careful about disposing things here since we will likely create many avatar
     // previews during a session and Chrome will eventually discard the oldest webgl context if we leak
     // contexts by holding on to them directly or indirectly.
 
-    this.scene && this.scene.traverse(disposeNode);
+    this.releaseAvatar();
     if (this.previewRenderer) {
+      this.previewRenderer.setAnimationLoop(null);
       this.previewRenderer.dispose();
     }
     if (this.snapshotRenderer) {
@@ -178,9 +186,50 @@ export class AvatarPreview extends Component {
       this.controls.domElement = null;
     }
 
-    Object.values(this.imageBitmaps).forEach(img => disposeImageBitmap(img));
     window.removeEventListener("resize", this.resize);
-    this.removeThemeChangedListener();
+    if (this.removeThemeChangedListener) this.removeThemeChangedListener();
+  };
+
+  disposePreviewAvatar = avatar => {
+    if (!avatar || this.disposedAvatars.has(avatar)) return;
+    this.disposedAvatars.add(avatar);
+    const resources = this.previewLoads.get(avatar);
+    if (resources) {
+      if (resources.disposed) return;
+      resources.disposed = true;
+      if (resources.mixer) {
+        resources.mixer.stopAllAction();
+        resources.mixer.uncacheRoot(avatar);
+      }
+      resources.extraGeometries.forEach(geometry => geometry.dispose());
+      resources.skeletons.forEach(skeleton => skeleton.dispose());
+      // Environment maps are created per load, not taken from the room/cache.
+      // Detach ours before the loader disposer visits the material.
+      if (resources.environmentMap) {
+        resources.previewMesh.material.envMap = null;
+        resources.environmentMap.dispose();
+      }
+      new Set([...resources.originalImages, ...Object.values(resources.imageBitmaps)]).forEach(disposeImageBitmap);
+      this.previewLoads.delete(avatar);
+    }
+    // Direct loadGLTF owns this scene; its disposer also covers loader resources
+    // no longer present in the scene graph (e.g. replaced jacket geometry).
+    if (avatar.dispose) avatar.dispose();
+  };
+
+  releaseAvatar = () => {
+    if (this.avatar) {
+      this.scene.remove(this.avatar);
+      this.disposePreviewAvatar(this.avatar);
+    }
+    // Also retire parsed models still waiting for maps. Their late dependencies
+    // see the disposed flag and clean themselves up without touching a new load.
+    for (const avatar of this.previewLoads.keys()) this.disposePreviewAvatar(avatar);
+    this.avatar = null;
+    this.previewResources = null;
+    this.previewBounds = null;
+    this.mixer = null;
+    this.idleAnimationAction = null;
   };
 
   componentDidUpdate = async oldProps => {
@@ -188,14 +237,12 @@ export class AvatarPreview extends Component {
       // Clearing a selection must also invalidate an in-flight load. Otherwise
       // its late callback can restore and validate a file the user discarded.
       if (!this.props.avatarGltfUrl) this.loadId++;
-      if (this.avatar) {
-        this.scene.remove(this.avatar);
-        this.avatar = null;
-      }
+      this.releaseAvatar();
       if (this.props.avatarGltfUrl) {
         this.setState({ error: null, loading: true });
         await this.loadCurrentAvatarGltfUrl();
       }
+      return;
     }
     this.applyMaps(oldProps, this.props);
   };
@@ -204,14 +251,36 @@ export class AvatarPreview extends Component {
     const newLoadId = ++this.loadId;
     if (this.props.onGltfLoading) this.props.onGltfLoading();
     const url = proxiedUrlFor(this.props.avatarGltfUrl);
+    let gltf;
     try {
-      const gltf = await this.loadPreviewAvatar(url);
+      gltf = await this.loadPreviewAvatar(url, newLoadId);
       // If we had started loading another avatar while we were loading this one, throw this one away
-      if (!this.mounted || newLoadId !== this.loadId) return;
+      if (!this.mounted || newLoadId !== this.loadId) {
+        if (gltf) this.disposePreviewAvatar(gltf.scene);
+        return;
+      }
       if (!gltf) throw new Error("Avatar preview load returned no model.");
+      const resources = this.previewLoads.get(gltf.scene);
+      let mapProps = resources && resources.mapProps;
+      // Map props can change while the model waits for its initial maps or
+      // environment. Reconcile them before publishing the ready preview; keep
+      // ownership local so updates during this await cannot touch another load.
+      while (resources && ALL_MAPS.some(name => mapProps[name] !== this.props[name])) {
+        const latestProps = this.props;
+        await this.applyMaps(mapProps, latestProps, resources);
+        mapProps = latestProps;
+        if (!this.mounted || newLoadId !== this.loadId) {
+          this.disposePreviewAvatar(gltf.scene);
+          return;
+        }
+      }
+      this.previewResources = resources;
+      this.mixer = this.previewResources && this.previewResources.mixer;
+      this.idleAnimationAction = this.previewResources && this.previewResources.idleAnimationAction;
       this.setAvatar(gltf.scene);
       if (this.props.onGltfLoaded) this.props.onGltfLoaded(gltf);
     } catch (error) {
+      if (gltf && this.avatar !== gltf.scene) this.disposePreviewAvatar(gltf.scene);
       if (!this.mounted || newLoadId !== this.loadId) return;
       console.error("Failed to load avatar preview", error);
       this.setState({ loading: false, error: true });
@@ -219,104 +288,145 @@ export class AvatarPreview extends Component {
     }
   }
 
-  applyMaps(oldProps, newProps) {
+  applyMaps(oldProps, newProps, resources = this.previewResources) {
+    if (!resources || resources.disposed) return Promise.resolve();
     return Promise.all(
       ALL_MAPS.map(mapName => {
-        const applyMap = this.applyMapToPreview.bind(this, mapName);
         if (oldProps[mapName] != newProps[mapName]) {
+          const version = (resources.mapVersions[mapName] || 0) + 1;
+          resources.mapVersions[mapName] = version;
+          const applyMap = image => {
+            if (resources.disposed || resources.mapVersions[mapName] !== version) {
+              disposeImageBitmap(image);
+              return;
+            }
+            this.applyMapToPreview(mapName, image, resources);
+          };
           if (newProps[mapName] instanceof File) {
             return createImageBitmap(newProps[mapName]).then(applyMap);
           } else if (newProps[mapName]) {
             return createImageBitmapFromURL(newProps[mapName]).then(applyMap);
           } else {
-            return this.revertMap(mapName);
+            return this.revertMap(mapName, resources);
           }
         }
       })
     );
   }
 
-  loadPreviewAvatar = async avatarGltfUrl => {
+  loadPreviewAvatar = async (avatarGltfUrl, loadId) => {
     const gltf = await loadGLTF(avatarGltfUrl, "model/gltf", null, ensureAvatarMaterial);
-    fitCreatorJackets(gltf.scene);
+    const resources = {
+      imageBitmaps: {},
+      originalImages: new Set(),
+      extraGeometries: new Set(),
+      skeletons: new Set(),
+      mapVersions: {},
+      disposed: false
+    };
+    this.previewLoads.set(gltf.scene, resources);
+    try {
+      const loaderGeometries = new Set();
+      gltf.scene.traverse(node => {
+        if (node.geometry) loaderGeometries.add(node.geometry);
+        if (node.skeleton) resources.skeletons.add(node.skeleton);
+        for (const material of [].concat(node.material || [])) {
+          for (const value of Object.values(material)) {
+            if (value && value.isTexture && value.image) resources.originalImages.add(value.image);
+          }
+        }
+      });
+      if (!this.mounted || loadId !== this.loadId) return gltf;
+      fitCreatorJackets(gltf.scene);
+      gltf.scene.traverse(node => {
+        if (node.geometry && !loaderGeometries.has(node.geometry)) resources.extraGeometries.add(node.geometry);
+      });
 
-    if (!this.mounted) return;
+      // TODO Check for "Bot_Skinned" here is a hack for legacy avatars which only has a name one of the MOZ_alt_material nodes
+      resources.previewMesh = findNode(
+        gltf.scene,
+        n => (n.isMesh && n.material && n.material.name === MAT_NAME) || n.name === "Bot_Skinned"
+      );
 
-    // TODO Check for "Bot_Skinned" here is a hack for legacy avatars which only has a name one of the MOZ_alt_material nodes
-    this.previewMesh = findNode(
-      gltf.scene,
-      n => (n.isMesh && n.material && n.material.name === MAT_NAME) || n.name === "Bot_Skinned"
-    );
-
-    if (!this.previewMesh) {
-      throw new Error("Failed to find avatar preview mesh.");
-    }
-
-    const idleAnimation = gltf.animations && gltf.animations.find(({ name }) => name === "idle_eyes");
-    if (idleAnimation) {
-      this.mixer = new THREE.AnimationMixer(gltf.scene);
-      const action = this.mixer.clipAction(idleAnimation);
-      action.enabled = true;
-      action.setLoop(THREE.LoopRepeat, Infinity).play();
-      this.idleAnimationAction = action;
-    }
-
-    gltf.scene.traverse(node => {
-      // Camera in preview is pretty tight, and skinned meshes tend to have poor bounding boxes
-      if (node.isSkinnedMesh) {
-        node.frustumCulled = false;
+      if (!resources.previewMesh) {
+        throw new Error("Failed to find avatar preview mesh.");
       }
 
-      // We delete onUpdate here to opt out of the auto texture cleanup after GPU upload.
-      if (node.material) {
-        const removeOnUpdate = p => node.material[p] && delete node.material[p].onUpdate;
-        TEXTURE_PROPS["base_map"].forEach(removeOnUpdate);
-        TEXTURE_PROPS["emissive_map"].forEach(removeOnUpdate);
-        TEXTURE_PROPS["normal_map"].forEach(removeOnUpdate);
-        TEXTURE_PROPS["orm_map"].forEach(removeOnUpdate);
-      }
-    });
-
-    const { material } = this.previewMesh;
-    if (material) {
-      const getImage = p => material[p] && material[p].image;
-      this.originalMaps = {
-        base_map: TEXTURE_PROPS["base_map"].map(getImage),
-        emissive_map: TEXTURE_PROPS["emissive_map"].map(getImage),
-        normal_map: TEXTURE_PROPS["normal_map"].map(getImage),
-        orm_map: TEXTURE_PROPS["orm_map"].map(getImage)
-      };
-
-      const dependencies = [
-        this.applyMaps({}, this.props) // Apply initial maps
-      ];
-
-      // Low and medium quality materials don't use environment maps
-      if (window.APP.store.state.preferences.materialQualitySetting === "high") {
-        dependencies.push(
-          // TODO apply environment map to secondary materials as well
-          createDefaultEnvironmentMap().then(t => {
-            this.previewMesh.material.envMap = t;
-            this.previewMesh.material.needsUpdate = true;
-          })
-        );
+      const idleAnimation = gltf.animations && gltf.animations.find(({ name }) => name === "idle_eyes");
+      if (idleAnimation) {
+        resources.mixer = new THREE.AnimationMixer(gltf.scene);
+        const action = resources.mixer.clipAction(idleAnimation);
+        action.enabled = true;
+        action.setLoop(THREE.LoopRepeat, Infinity).play();
+        resources.idleAnimationAction = action;
       }
 
-      await Promise.all(dependencies);
-    } else {
-      this.originalMaps = {};
+      gltf.scene.traverse(node => {
+        // Camera in preview is pretty tight, and skinned meshes tend to have poor bounding boxes
+        if (node.isSkinnedMesh) {
+          node.frustumCulled = false;
+        }
+
+        // We delete onUpdate here to opt out of the auto texture cleanup after GPU upload.
+        for (const material of [].concat(node.material || [])) {
+          const removeOnUpdate = p => material[p] && delete material[p].onUpdate;
+          TEXTURE_PROPS["base_map"].forEach(removeOnUpdate);
+          TEXTURE_PROPS["emissive_map"].forEach(removeOnUpdate);
+          TEXTURE_PROPS["normal_map"].forEach(removeOnUpdate);
+          TEXTURE_PROPS["orm_map"].forEach(removeOnUpdate);
+        }
+      });
+
+      const { material } = resources.previewMesh;
+      resources.mapProps = this.props;
+      if (material) {
+        const getImage = p => material[p] && material[p].image;
+        resources.originalMaps = {
+          base_map: TEXTURE_PROPS["base_map"].map(getImage),
+          emissive_map: TEXTURE_PROPS["emissive_map"].map(getImage),
+          normal_map: TEXTURE_PROPS["normal_map"].map(getImage),
+          orm_map: TEXTURE_PROPS["orm_map"].map(getImage)
+        };
+
+        const dependencies = [
+          this.applyMaps({}, resources.mapProps, resources) // Apply initial maps
+        ];
+
+        // Low and medium quality materials don't use environment maps
+        if (window.APP.store.state.preferences.materialQualitySetting === "high") {
+          dependencies.push(
+            // TODO apply environment map to secondary materials as well
+            createDefaultEnvironmentMap().then(t => {
+              if (resources.disposed) {
+                t.dispose();
+                return;
+              }
+              resources.environmentMap = t;
+              resources.previewMesh.material.envMap = t;
+              resources.previewMesh.material.needsUpdate = true;
+            })
+          );
+        }
+
+        await Promise.all(dependencies);
+      } else {
+        resources.originalMaps = {};
+      }
+
+      return gltf;
+    } catch (error) {
+      this.disposePreviewAvatar(gltf.scene);
+      throw error;
     }
-
-    return gltf;
   };
 
-  applyMapToPreview = (name, image) => {
-    if (this.imageBitmaps[name]) {
-      disposeImageBitmap(this.imageBitmaps[name]);
+  applyMapToPreview = (name, image, resources = this.previewResources) => {
+    if (resources.imageBitmaps[name]) {
+      disposeImageBitmap(resources.imageBitmaps[name]);
     }
-    this.imageBitmaps[name] = image;
+    resources.imageBitmaps[name] = image;
     TEXTURE_PROPS[name].forEach(prop => {
-      const texture = this.previewMesh.material[prop];
+      const texture = resources.previewMesh.material[prop];
 
       // Low quality materials are missing normal maps
       if (prop === "normalMap" && window.APP.store.state.preferences.materialQualitySetting === "low") {
@@ -331,18 +441,20 @@ export class AvatarPreview extends Component {
         return;
       }
 
-      texture.image = image;
-      texture.needsUpdate = true;
+      if (texture) {
+        texture.image = image;
+        texture.needsUpdate = true;
+      }
     });
   };
 
-  revertMap = name => {
-    if (this.imageBitmaps[name]) {
-      disposeImageBitmap(this.imageBitmaps[name]);
+  revertMap = (name, resources = this.previewResources) => {
+    if (resources.imageBitmaps[name]) {
+      disposeImageBitmap(resources.imageBitmaps[name]);
     }
-    delete this.imageBitmaps[name];
-    this.originalMaps[name].forEach((bm, i) => {
-      const texture = this.previewMesh.material[TEXTURE_PROPS[name][i]];
+    delete resources.imageBitmaps[name];
+    resources.originalMaps[name].forEach((bm, i) => {
+      const texture = resources.previewMesh.material[TEXTURE_PROPS[name][i]];
 
       if (texture) {
         texture.image = bm;

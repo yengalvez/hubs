@@ -64,3 +64,21 @@ export function fitAvatarPreviewCamera(camera, box, center, orientation, margin 
   }
   camera.position.set(0, 0, distance).applyQuaternion(camera.quaternion).add(center);
 }
+
+// Keep the user's orbit, pan and zoom relative to the fitted view. Re-running
+// the initial fit would reset those choices on every viewport change.
+export function resizeAvatarPreviewCamera(camera, box, target, aspect) {
+  if (!Number.isFinite(aspect) || aspect <= 0) return;
+  if (box && !box.isEmpty() && camera.aspect > 0) {
+    const fitted = camera.clone();
+    const orientation = camera.rotation.clone();
+    fitAvatarPreviewCamera(fitted, box, target, orientation);
+    const oldDistance = fitted.position.distanceTo(target);
+    fitted.aspect = aspect;
+    fitAvatarPreviewCamera(fitted, box, target, orientation);
+    const ratio = fitted.position.distanceTo(target) / oldDistance;
+    camera.position.sub(target).multiplyScalar(ratio).add(target);
+  }
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+}

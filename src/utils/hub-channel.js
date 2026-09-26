@@ -47,6 +47,7 @@ export default class HubChannel extends EventTarget {
     this._signedIn = !!this.store.state.credentials.token;
     this._permissions = {};
     this._blockedSessionIds = new Set();
+    this.productModules = { bots_enabled: false, ai_enabled: false };
     this._botChatCapabilityState = new BotChatCapabilityState(detail => {
       this.dispatchEvent(new CustomEvent("bot_chat_capability_changed", { detail }));
     });
@@ -102,6 +103,7 @@ export default class HubChannel extends EventTarget {
 
   // Migrates this hub channel to a new phoenix channel and presence
   async migrateToSocket(socket, params) {
+    this.configureProductModules(null);
     let presenceBindings;
 
     // Unbind presence, and then set up bindings after reconnect
@@ -118,6 +120,7 @@ export default class HubChannel extends EventTarget {
     }
 
     this.channel = await migrateChannelToSocket(this.channel, socket, params);
+    this.bindProductModuleDisconnect(this.channel);
     this.waypointReservations.setChannel(this.channel);
     this.presence = new Presence(this.channel);
 
@@ -129,6 +132,7 @@ export default class HubChannel extends EventTarget {
   }
 
   async migrateToHub(hubId) {
+    this.configureProductModules(null);
     let presenceBindings;
 
     const newChannel = this.channel.socket.channel(`hub:${hubId}`, APP.hubChannelParamsForPermsToken());
@@ -147,6 +151,7 @@ export default class HubChannel extends EventTarget {
     }
 
     this.channel = newChannel;
+    this.bindProductModuleDisconnect(this.channel);
     this.waypointReservations.setChannel(this.channel);
     this.presence = new Presence(this.channel);
     this.hubId = data.hubs[0].hub_id;
@@ -166,7 +171,28 @@ export default class HubChannel extends EventTarget {
   setChannel(channel) {
     this.channel = channel;
     this.waypointReservations.setChannel(channel);
+    this.configureProductModules(null);
+    channel.on("product_modules_changed", this.configureProductModules);
+    this.bindProductModuleDisconnect(channel);
   }
+
+  bindProductModuleDisconnect(channel) {
+    const revoke = () => {
+      if (this.channel === channel) this.configureProductModules(null);
+    };
+    channel.onClose(revoke);
+    channel.onError(revoke);
+  }
+
+  configureProductModules = capabilities => {
+    this.productModules = {
+      bots_enabled: capabilities?.bots_enabled === true,
+      ai_enabled: capabilities?.bots_enabled === true && capabilities?.ai_enabled === true
+    };
+    // Rotate the local admission epoch even for OFF/ON pulses with the same
+    // session token, cancelling pending UI requests and ephemeral history.
+    this.configureBotChatCapability(this.botChatCapability);
+  };
 
   configureWaypointReservations(capability) {
     this.waypointReservations.configure(capability);
@@ -526,6 +552,7 @@ export default class HubChannel extends EventTarget {
   unfavorite = () => this.channel.push("unfavorite", {});
 
   disconnect = () => {
+    this.configureProductModules(null);
     if (this.channel) {
       this.channel.socket.disconnect();
     }

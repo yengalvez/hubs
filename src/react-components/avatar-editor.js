@@ -12,6 +12,7 @@ import { fetchReticulumAuthenticated } from "../utils/phoenix-utils";
 import { upload } from "../utils/media-utils";
 import { ensureAvatarMaterial } from "../utils/avatar-utils";
 import { validateAvatarGlbFile } from "../utils/avatar-glb-utils";
+import { normalizeAvaturnCreatorUrl } from "../utils/avaturn-utils";
 import { getAvatarSkeletonMetadata } from "../utils/avatar-skeleton-utils";
 
 import AvatarPreview from "./avatar-preview";
@@ -121,6 +122,10 @@ class AvatarEditor extends Component {
 
   isPrivateGlbMode = () => ["private-glb", "avaturn-private", "creator", "avaturn"].includes(this.props.mode);
 
+  isAvaturnEnabled = () =>
+    configs.feature("enable_avaturn_creator") === true &&
+    !!normalizeAvaturnCreatorUrl(configs.link("avaturn_creator", ""));
+
   invalidateCreatorFile = () => {
     ++this.glbSelectionId;
     this.inputFiles.glb = null;
@@ -129,6 +134,7 @@ class AvatarEditor extends Component {
       previewGltfUrl: null,
       previewReady: false,
       avatarSkeletonMetadata: null,
+      avaturnValidationError: null,
       uploadError: null,
       avatar: { ...avatar, files: { ...avatar.files, glb: null } }
     }));
@@ -140,7 +146,7 @@ class AvatarEditor extends Component {
     const selectionId = this.glbSelectionId;
     try {
       await validateAvatarGlbFile(file);
-      if (selectionId !== this.glbSelectionId) return;
+      if (this.unmounted || selectionId !== this.glbSelectionId) return false;
       const url = URL.createObjectURL(file);
       this.inputFiles.glb = file;
       this.setState(({ avatar }) => ({
@@ -157,12 +163,15 @@ class AvatarEditor extends Component {
   };
 
   handleAvaturnExportStart = () => {
+    if (!this.isAvaturnEnabled() || this.uploadInFlight || this.savedAvaturn) return false;
+    clearTimeout(this.avaturnAutoSaveTimer);
     this.avaturnAutoSavePending = true;
     this.invalidateCreatorFile();
     this.setState({ avaturnSaveAttempted: false, avaturnSaveState: "receiving" });
   };
 
   acceptAvaturnFile = async file => {
+    if (this.unmounted || !this.isAvaturnEnabled() || this.uploadInFlight || this.savedAvaturn) return false;
     const accepted = await this.acceptCreatorFile(file);
     if (!accepted) this.avaturnAutoSavePending = false;
     return accepted;
@@ -174,6 +183,7 @@ class AvatarEditor extends Component {
   };
 
   componentWillUnmount() {
+    this.unmounted = true;
     clearTimeout(this.avaturnAutoSaveTimer);
     clearTimeout(this.avaturnSuccessTimer);
     this.glbSelectionId++;
@@ -183,6 +193,7 @@ class AvatarEditor extends Component {
   }
 
   componentDidMount = async () => {
+    this.unmounted = false;
     if (this.props.avatarId) {
       const avatar = await fetchAvatar(this.props.avatarId);
       avatar.creatorAttribution = (avatar.attributions && avatar.attributions.creator) || "";
@@ -234,6 +245,9 @@ class AvatarEditor extends Component {
 
   uploadAvatar = async e => {
     if (e && e.preventDefault) e.preventDefault();
+    const isAvaturnMode = this.props.mode === "avaturn";
+    if (this.unmounted || this.uploadInFlight || (isAvaturnMode && (this.savedAvaturn || !this.isAvaturnEnabled())))
+      return;
     const isPrivateGlbMode = this.isPrivateGlbMode();
     const localGlb = this.inputFiles.glb instanceof File ? this.inputFiles.glb : null;
 
@@ -247,7 +261,10 @@ class AvatarEditor extends Component {
       return;
     }
 
-    const isAvaturnMode = this.props.mode === "avaturn";
+    this.uploadInFlight = true;
+    const selectionId = this.glbSelectionId;
+    const isCurrent = () =>
+      !this.unmounted && selectionId === this.glbSelectionId && (!isAvaturnMode || this.isAvaturnEnabled());
     let gltfUrl = null;
     this.setState({
       uploadError: null,
@@ -258,6 +275,7 @@ class AvatarEditor extends Component {
     try {
       if (localGlb) {
         await validateAvatarGlbFile(localGlb);
+        if (!isCurrent()) return;
         const gltfLoader = new GLTFLoader().register(parser => new GLTFBinarySplitterPlugin(parser, !isPrivateGlbMode));
         gltfUrl = URL.createObjectURL(localGlb);
 
@@ -275,6 +293,8 @@ class AvatarEditor extends Component {
           );
         });
 
+        if (!isCurrent()) return;
+
         if (isPrivateGlbMode) {
           const skeletonMetadata = getAvatarSkeletonMetadata(parsedGltf.scene);
           if (!skeletonMetadata.hasRequiredUpperBody) {
@@ -283,7 +303,9 @@ class AvatarEditor extends Component {
         }
       }
 
-      this.inputFiles.thumbnail = new File([await this.preview.snapshot()], "thumbnail.png", {
+      const thumbnail = await this.preview.snapshot();
+      if (!isCurrent()) return;
+      this.inputFiles.thumbnail = new File([thumbnail], "thumbnail.png", {
         type: "image/png"
       });
 
@@ -291,6 +313,7 @@ class AvatarEditor extends Component {
         k => this.inputFiles[k] === null || this.inputFiles[k] instanceof File
       );
       const fileUploads = await Promise.all(filesToUpload.map(f => this.inputFiles[f] && upload(this.inputFiles[f])));
+      if (!isCurrent()) return;
       const avatar = {
         ...this.state.avatar,
         allow_promotion: isPrivateGlbMode ? false : this.state.avatar.allow_promotion,
@@ -307,6 +330,10 @@ class AvatarEditor extends Component {
       };
 
       const savedAvatar = await this.createOrUpdateAvatar(avatar);
+      // Terminal before setState/onSave: neither a queued Next nor a form submit
+      // during the success notice may create a second avatar.
+      if (isAvaturnMode) this.savedAvaturn = savedAvatar;
+      if (this.unmounted) return;
       this.setState({ uploading: false, ...(isAvaturnMode ? { avaturnSaveState: "saved" } : {}) }, () => {
         if (!this.props.onSave) return;
         if (!isAvaturnMode) {
@@ -314,9 +341,12 @@ class AvatarEditor extends Component {
           return;
         }
         clearTimeout(this.avaturnSuccessTimer);
-        this.avaturnSuccessTimer = setTimeout(() => this.props.onSave(savedAvatar), 1400);
+        this.avaturnSuccessTimer = setTimeout(() => {
+          if (!this.unmounted) this.props.onSave(savedAvatar);
+        }, 1400);
       });
     } catch (error) {
+      if (this.unmounted) return;
       console.error("Failed to upload avatar.", error);
       this.setState({
         uploading: false,
@@ -324,6 +354,7 @@ class AvatarEditor extends Component {
         uploadError: error && error.message ? error.message : "No se pudo subir el avatar. Inténtalo de nuevo."
       });
     } finally {
+      this.uploadInFlight = false;
       revokeObjectUrl(gltfUrl);
     }
   };
@@ -629,6 +660,7 @@ class AvatarEditor extends Component {
   );
 
   handleGltfLoaded = gltf => {
+    if (this.unmounted || (this.props.mode === "avaturn" && (!this.isAvaturnEnabled() || this.savedAvaturn))) return;
     const ext = gltf.parser.json.extensions && gltf.parser.json.extensions["MOZ_hubs_avatar"];
     let editorLinks = (ext && ext.editors) || defaultEditors;
     if (useAllowedEditors) {
@@ -643,6 +675,8 @@ class AvatarEditor extends Component {
           previewReady: false,
           avatarSkeletonMetadata,
           avaturnSaveAttempted: this.props.mode === "avaturn",
+          avaturnValidationError:
+            this.props.mode === "avaturn" ? this.getInvalidSkeletonMessage(avatarSkeletonMetadata) : null,
           uploadError: this.getInvalidSkeletonMessage(avatarSkeletonMetadata)
         });
         return;
@@ -682,6 +716,10 @@ class AvatarEditor extends Component {
       previewReady: false,
       avatarSkeletonMetadata: null,
       avaturnSaveAttempted: this.props.mode === "avaturn",
+      avaturnValidationError:
+        this.props.mode === "avaturn"
+          ? "No se pudo cargar el GLB. Comprueba que sea un avatar compatible y no esté dañado."
+          : null,
       uploadError: "No se pudo cargar el GLB. Comprueba que sea un avatar compatible y no esté dañado."
     });
   };
@@ -697,6 +735,24 @@ class AvatarEditor extends Component {
     const isPrivateGlbMode = this.isPrivateGlbMode();
     const isAvaturnMode = this.props.mode === "avaturn";
     const avaturnCreatorUrl = configs.link("avaturn_creator", "");
+
+    if (isAvaturnMode && !this.isAvaturnEnabled()) {
+      return (
+        <div className={styles.avatarEditor}>
+          <p role="status">
+            <FormattedMessage
+              id="avaturn-creator.unavailable"
+              defaultMessage="El creador Avaturn no está disponible en esta instalación."
+            />
+          </p>
+          {this.props.onClose && (
+            <button type="button" onClick={this.props.onClose}>
+              <FormattedMessage id="avatar-editor.close" defaultMessage="Cerrar" />
+            </button>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div
@@ -744,7 +800,8 @@ class AvatarEditor extends Component {
                         onExportStart={this.handleAvaturnExportStart}
                         onExport={this.acceptAvaturnFile}
                         onError={this.handleAvaturnError}
-                        disabled={this.state.uploading}
+                        validationError={this.state.avaturnValidationError}
+                        disabled={this.state.uploading || this.state.avaturnSaveState === "saved"}
                       />
                     ) : (
                       <>
@@ -1036,7 +1093,7 @@ class AvatarEditor extends Component {
               </div>
             )}
             {!isPrivateGlbMode && this.state.uploadError && <p className="error-text">{this.state.uploadError}</p>}
-            {(!isAvaturnMode || this.state.avaturnSaveAttempted) && (
+            {(!isAvaturnMode || (this.state.avaturnSaveAttempted && this.state.avaturnSaveState !== "saved")) && (
               <div>
                 <button
                   disabled={

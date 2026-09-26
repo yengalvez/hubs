@@ -1,14 +1,15 @@
 import React, { Component } from "react";
 import PropTypes from "prop-types";
 import { FormattedMessage } from "react-intl";
-import { AvaturnSDK } from "@avaturn/sdk";
-
-import { avaturnExportToFile, normalizeAvaturnCreatorUrl } from "../utils/avaturn-utils";
+import configs from "../utils/configs";
+import { loadAvaturnSdk } from "../utils/avaturn-sdk";
+import { avaturnExportToFile, normalizeAvaturnCreatorUrl, withAvaturnDeadline } from "../utils/avaturn-utils";
 
 export default class AvaturnCreator extends Component {
   static propTypes = {
     creatorUrl: PropTypes.string.isRequired,
     disabled: PropTypes.bool,
+    validationError: PropTypes.string,
     onExport: PropTypes.func.isRequired,
     onExportStart: PropTypes.func,
     onError: PropTypes.func
@@ -16,35 +17,89 @@ export default class AvaturnCreator extends Component {
 
   state = { status: "loading", error: null };
 
-  async componentDidMount() {
-    this.unmounted = false;
-    const creatorUrl = normalizeAvaturnCreatorUrl(this.props.creatorUrl);
-    if (!creatorUrl) {
-      this.fail("La dirección configurada para Avaturn no es válida.");
-      return;
-    }
+  componentDidMount() {
+    return this.start();
+  }
 
-    const sdk = new AvaturnSDK();
-    this.sdk = sdk;
-    try {
-      await sdk.init(this.container, { url: creatorUrl, iframeClassName: "avaturn-sdk-frame" });
-      if (this.unmounted || this.sdk !== sdk) {
-        sdk.destroy();
-        return;
-      }
-      sdk.on("export", this.handleExport);
-      sdk.on("error", () => this.fail("Avaturn no pudo completar el avatar. Inténtalo de nuevo."));
-      this.setState({ status: "ready", error: null });
-    } catch {
-      this.fail("No se pudo abrir Avaturn. Comprueba tu conexión e inténtalo de nuevo.");
+  componentDidUpdate(previousProps) {
+    if (previousProps.creatorUrl !== this.props.creatorUrl || (!this.isEnabled() && this.session)) {
+      this.start();
+    } else if (
+      this.props.validationError &&
+      this.props.validationError !== previousProps.validationError &&
+      !this.props.disabled
+    ) {
+      // Header acceptance precedes rig/preview validation. A rejected preview
+      // must permit a new export, but a saved/in-flight avatar stays locked.
+      this.exportLocked = false;
+      this.fail(this.props.validationError);
     }
   }
 
-  componentWillUnmount() {
-    this.unmounted = true;
+  isEnabled = () =>
+    configs.feature("enable_avaturn_creator") === true && !!normalizeAvaturnCreatorUrl(this.props.creatorUrl);
+
+  stop = () => {
+    if (this.session) this.session.abort();
+    this.session = null;
     if (this.sdk) this.sdk.destroy();
     this.sdk = null;
     if (this.container) this.container.replaceChildren();
+  };
+
+  start = async () => {
+    this.stop();
+    this.unmounted = false;
+    this.exportLocked = false;
+    const creatorUrl = normalizeAvaturnCreatorUrl(this.props.creatorUrl);
+    if (!this.isEnabled()) {
+      this.setState({ status: "unavailable", error: "El creador Avaturn no está disponible en esta instalación." });
+      return;
+    }
+    const session = new AbortController();
+    this.session = session;
+    this.setState({ status: "loading", error: null });
+    try {
+      await withAvaturnDeadline(
+        async signal => {
+          const sdk = await loadAvaturnSdk(creatorUrl);
+          if (signal.aborted || this.session !== session || !this.isEnabled()) {
+            sdk.destroy();
+            return;
+          }
+          this.sdk = sdk;
+          await sdk.init(this.container, { url: creatorUrl, iframeClassName: "avaturn-sdk-frame" });
+        },
+        {
+          signal: session.signal,
+          timeoutMs: 30000,
+          timeoutMessage: "Avaturn no respondió a tiempo. Inténtalo de nuevo."
+        }
+      );
+      if (this.unmounted || this.session !== session || !this.isEnabled()) return;
+      const sdk = this.sdk;
+      if (!sdk) return;
+      sdk.on("export", this.handleExport);
+      sdk.on("error", () => {
+        if (this.session === session && !this.exportLocked) {
+          this.fail("Avaturn no pudo completar el avatar. Inténtalo de nuevo.");
+        }
+      });
+      this.setState({ status: "ready", error: null });
+    } catch (error) {
+      if (this.unmounted || this.session !== session) return;
+      this.stop();
+      this.fail(
+        error.name === "TimeoutError"
+          ? error.message
+          : "No se pudo abrir Avaturn. Comprueba tu conexión e inténtalo de nuevo."
+      );
+    }
+  };
+
+  componentWillUnmount() {
+    this.unmounted = true;
+    this.stop();
   }
 
   fail = message => {
@@ -54,16 +109,23 @@ export default class AvaturnCreator extends Component {
   };
 
   handleExport = async result => {
-    if (this.unmounted || this.props.disabled || this.state.status === "exporting") return;
+    if (this.unmounted || !this.isEnabled() || !this.session || this.props.disabled || this.exportLocked) return;
+    // Synchronous lock: React state is not a mutex for two callbacks in one tick.
+    this.exportLocked = true;
+    const session = this.session;
+    if (this.props.onExportStart && this.props.onExportStart() === false) return;
     this.setState({ status: "exporting", error: null });
-    if (this.props.onExportStart) this.props.onExportStart();
 
     try {
-      const file = await avaturnExportToFile(result, this.props.creatorUrl);
+      const file = await avaturnExportToFile(result, this.props.creatorUrl, { signal: session.signal });
+      if (this.unmounted || this.session !== session || !this.isEnabled()) return;
       const accepted = await this.props.onExport(file);
       if (accepted === false) throw new Error("Avaturn devolvió un avatar que YenHubs no puede usar.");
-      if (!this.unmounted) this.setState({ status: "received", error: null });
+      if (this.props.validationError) throw new Error(this.props.validationError);
+      if (!this.unmounted && this.session === session) this.setState({ status: "received", error: null });
     } catch (error) {
+      if (this.unmounted || this.session !== session) return;
+      this.exportLocked = false;
       this.fail(error && error.message ? error.message : "No se pudo importar el avatar desde Avaturn.");
     }
   };
@@ -111,6 +173,11 @@ export default class AvaturnCreator extends Component {
           </p>
         )}
         {error && <p className="error-text">{error}</p>}
+        {status === "error" && !this.props.disabled && (
+          <button type="button" onClick={this.start}>
+            <FormattedMessage id="avaturn-creator.retry" defaultMessage="Reintentar Avaturn" />
+          </button>
+        )}
         <div className="avaturn-sdk-container" ref={element => (this.container = element)} />
       </section>
     );

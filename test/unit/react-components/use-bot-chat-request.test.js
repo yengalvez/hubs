@@ -162,3 +162,35 @@ test.serial("capability rotation aborts a stale reply and the next mounted send 
   t.true(messages.some(message => message.text === "reply-from-b"));
   await harness.unmount();
 });
+
+test.serial("turning sendingDisabled on aborts transport and suppresses late replies and actions", async t => {
+  let complete;
+  let signal;
+  const messages = [];
+  const harness = await mountHarness(
+    baseProps({
+      requestBotChat: (_url, _method, _body, options) => {
+        signal = options.signal;
+        return new Promise(resolve => (complete = resolve));
+      },
+      onAppendMessage: message => messages.push(message)
+    })
+  );
+  let pending;
+  await act(async () => {
+    pending = harness.latest.onSend(submitEvent);
+  });
+  await harness.render({ sendingDisabled: true });
+  t.true(signal.aborted);
+  t.false(harness.latest.canChat);
+  t.false(harness.latest.sending);
+  await act(async () => {
+    complete({ reply: "late reply", action: { waypoint: "spawbot-lobby" } });
+    await pending;
+  });
+  t.deepEqual(
+    messages.map(message => message.author),
+    ["user"]
+  );
+  await harness.unmount();
+});

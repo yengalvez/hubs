@@ -63,6 +63,8 @@ export function useBotChatRequest({
   };
   const requestIdentityRef = useRef(requestIdentity);
   requestIdentityRef.current = requestIdentity;
+  const sendingDisabledRef = useRef(sendingDisabled);
+  sendingDisabledRef.current = sendingDisabled;
 
   useEffect(() => {
     const syncCapability = () => {
@@ -87,11 +89,18 @@ export function useBotChatRequest({
     requestLifecycleRef.current.cancel();
     setSending(false);
     return () => requestLifecycleRef.current.cancel();
-  }, [hubChannel, hubSid, botId, capabilityState.epoch, sessionEpoch]);
+  }, [hubChannel, hubSid, botId, capabilityState.epoch, sessionEpoch, sendingDisabled]);
 
   useEffect(() => () => requestLifecycleRef.current.cancel(), []);
 
-  const canChat = !!(hubSid && botId && hubChannel && hubChannel.signedIn && capabilityState.capability);
+  const canChat = !!(
+    !sendingDisabled &&
+    hubSid &&
+    botId &&
+    hubChannel &&
+    hubChannel.signedIn &&
+    capabilityState.capability
+  );
 
   const onSend = useCallback(
     async e => {
@@ -146,7 +155,8 @@ export function useBotChatRequest({
           { signal: request.signal }
         );
 
-        if (!requestLifecycleRef.current.isCurrent(request, requestIdentityRef.current)) return;
+        if (sendingDisabledRef.current || !requestLifecycleRef.current.isCurrent(request, requestIdentityRef.current))
+          return;
 
         if (typeof result === "string") {
           throw new Error("bot_chat_failed");
@@ -174,7 +184,8 @@ export function useBotChatRequest({
           );
         }
       } catch {
-        if (!requestLifecycleRef.current.isCurrent(request, requestIdentityRef.current)) return;
+        if (sendingDisabledRef.current || !requestLifecycleRef.current.isCurrent(request, requestIdentityRef.current))
+          return;
         onAppendMessage(
           makeMessage(
             "system",

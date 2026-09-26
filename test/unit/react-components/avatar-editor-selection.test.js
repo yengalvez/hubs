@@ -19,6 +19,11 @@ const parsedFiles = [];
 const uploadedFiles = [];
 const savedAvatars = [];
 let nextUrl = 0;
+let avaturnEnabled = true;
+let avaturnUrl = "https://yenhubs.avaturn.dev";
+let avaturnCreatorProps;
+let saveFailure = false;
+let saveBarrier;
 
 function gltfFixture(compatible = true) {
   const names = compatible
@@ -57,11 +62,16 @@ class PreviewStub extends React.Component {
 
 const stubs = {
   "./avatar-creator-controls": () => null,
-  "./avaturn-creator": () => null,
-  "../utils/configs": { link: () => "https://yenhubs.avaturn.dev" },
+  "./avaturn-creator": props => {
+    avaturnCreatorProps = props;
+    return <div data-testid="avaturn-creator" />;
+  },
+  "../utils/configs": { link: () => avaturnUrl, feature: () => avaturnEnabled },
   "./if-feature": () => null,
   "../utils/phoenix-utils": {
     fetchReticulumAuthenticated: async (_url, _method, { avatar }) => {
+      if (saveBarrier) await saveBarrier;
+      if (saveFailure) throw new Error("Save temporarily unavailable");
       savedAvatars.push(avatar);
       return { avatars: [{ avatar_id: "local-only" }] };
     }
@@ -126,6 +136,13 @@ test.after.always(() => {
   global.IS_REACT_ACT_ENVIRONMENT = originalGlobals.act;
 });
 
+test.beforeEach(() => {
+  avaturnEnabled = true;
+  avaturnUrl = "https://yenhubs.avaturn.dev";
+  saveFailure = false;
+  saveBarrier = null;
+});
+
 function headerFile(name = "valid.glb") {
   const bytes = new Uint8Array(12);
   const header = new DataView(bytes.buffer);
@@ -154,6 +171,7 @@ async function mount(t, mode = "private-glb", onSave) {
     container.remove();
   });
   return {
+    container,
     editor: ref.current,
     get save() {
       return container.querySelector('button[type="submit"]');
@@ -387,7 +405,84 @@ test.serial("Avaturn export validates, previews, confirms and saves privately wi
   t.false(savedAvatars[0].allow_promotion);
   t.false(savedAvatars[0].allow_remixing);
   t.is(h.editor.state.avaturnSaveState, "saved");
+  t.falsy(h.save, "there is no Retry save button after a successful save");
+  await h.submit();
+  await h.submit();
+  await act(async () => h.editor.handleAvaturnExportStart());
+  t.false(await h.editor.acceptAvaturnFile(headerFile("duplicate.glb")));
+  t.is(savedAvatars.length, 1, "success is terminal during the 1400ms confirmation");
   t.falsy(saved, "the success confirmation remains visible before returning to My Avatars");
   await act(async () => new Promise(resolve => setTimeout(resolve, 1450)));
   t.is(saved.avatar_id, "local-only");
+});
+
+test.serial("direct/history Avaturn editor mount with OFF or invalid URL never mounts creator", async t => {
+  avaturnEnabled = false;
+  const off = await mount(t, "avaturn");
+  t.falsy(off.container.querySelector('[data-testid="avaturn-creator"]'));
+  t.regex(off.container.textContent, /no está disponible/);
+  t.false(off.editor.handleAvaturnExportStart());
+  t.false(await off.editor.acceptAvaturnFile(headerFile()));
+  await off.submit();
+  t.is(savedAvatars.length, 0);
+  avaturnEnabled = true;
+  avaturnUrl = "https://evil.example";
+  const invalid = await mount(t, "avaturn");
+  t.falsy(invalid.container.querySelector('[data-testid="avaturn-creator"]'));
+});
+
+for (const failure of ["rig", "load"]) {
+  test.serial(`Avaturn ${failure} rejection reaches the creator and permits a fresh validated export`, async t => {
+    const h = await mount(t, "avaturn");
+    await act(async () => h.editor.handleAvaturnExportStart());
+    await act(async () => h.editor.acceptAvaturnFile(headerFile("bad-preview.glb")));
+    if (failure === "rig") await h.ready(false);
+    else await act(async () => h.editor.handleGltfLoadError());
+    t.truthy(avaturnCreatorProps.validationError);
+    t.false(avaturnCreatorProps.disabled);
+    t.false(h.editor.state.previewReady);
+    t.is(savedAvatars.length, 0);
+    await act(async () => h.editor.handleAvaturnExportStart());
+    t.is(avaturnCreatorProps.validationError, null);
+    await act(async () => h.editor.acceptAvaturnFile(headerFile("good-preview.glb")));
+    await h.ready(true);
+    await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+    t.is(savedAvatars.length, 1);
+    t.true(avaturnCreatorProps.disabled);
+    t.false(h.editor.handleAvaturnExportStart());
+    t.false(await h.editor.acceptAvaturnFile(headerFile("must-not-duplicate.glb")));
+    t.is(savedAvatars.length, 1);
+  });
+}
+
+test.serial("a failed Avaturn save can retry, with concurrent retries coalesced", async t => {
+  const h = await mount(t, "avaturn");
+  await act(async () => h.editor.handleAvaturnExportStart());
+  await act(async () => h.editor.acceptAvaturnFile(headerFile()));
+  saveFailure = true;
+  await h.ready();
+  await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+  t.is(h.editor.state.avaturnSaveState, "error");
+  t.false(h.save.disabled);
+  t.is(savedAvatars.length, 0);
+  saveFailure = false;
+  let release;
+  saveBarrier = new Promise(resolve => {
+    release = resolve;
+  });
+  let first;
+  await act(async () => {
+    first = h.editor.uploadAvatar();
+    await h.editor.uploadAvatar();
+  });
+  t.true(h.editor.uploadInFlight);
+  t.false(h.editor.handleAvaturnExportStart());
+  await act(async () => {
+    release();
+    await first;
+  });
+  t.is(savedAvatars.length, 1);
+  t.is(h.editor.state.avaturnSaveState, "saved");
+  await h.submit();
+  t.is(savedAvatars.length, 1);
 });

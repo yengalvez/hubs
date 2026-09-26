@@ -16,7 +16,11 @@ import {
   Uint16BufferAttribute,
   Vector3
 } from "three";
-import { fitAvatarPreviewCamera, getAvatarPreviewBounds } from "../../../src/utils/avatar-preview-bounds";
+import {
+  fitAvatarPreviewCamera,
+  getAvatarPreviewBounds,
+  resizeAvatarPreviewCamera
+} from "../../../src/utils/avatar-preview-bounds";
 
 function skinnedLine(bindScale = 1) {
   const geometry = new BufferGeometry();
@@ -106,3 +110,50 @@ for (const aspect of [200 / 450, 720 / 1280]) {
     }
   });
 }
+
+test("resize from square to narrow keeps the avatar in frame and round-trips", t => {
+  const box = new Box3(new Vector3(-0.91, 0, -0.17), new Vector3(0.91, 1.87, 0.24));
+  const target = new Vector3(0, 1.87 * 0.6, 0.035);
+  const camera = new PerspectiveCamera(55, 1, 0.1, 1000);
+  fitAvatarPreviewCamera(camera, box, target, new Euler(-Math.PI / 6, Math.PI / 6, 0));
+  const start = camera.position.clone();
+  resizeAvatarPreviewCamera(camera, box, target, 200 / 450);
+  camera.updateMatrixWorld(true);
+  for (const x of [box.min.x, box.max.x]) {
+    for (const y of [box.min.y, box.max.y]) {
+      for (const z of [box.min.z, box.max.z]) {
+        const projected = new Vector3(x, y, z).project(camera);
+        t.true(Math.abs(projected.x) <= 1);
+        t.true(Math.abs(projected.y) <= 1);
+      }
+    }
+  }
+  resizeAvatarPreviewCamera(camera, box, target, 1);
+  t.true(camera.position.distanceTo(start) < 1e-10);
+});
+
+test("resize preserves a deliberate orbit, pan and relative zoom", t => {
+  const box = new Box3(new Vector3(-1, 0, -0.2), new Vector3(1, 2, 0.2));
+  const target = new Vector3(0.2, 1.5, 0.1);
+  const camera = new PerspectiveCamera(55, 1, 0.1, 1000);
+  fitAvatarPreviewCamera(camera, box, target, new Euler(-0.2, -0.8, 0));
+  camera.position.sub(target).multiplyScalar(0.65).add(target);
+  const rotation = camera.quaternion.clone();
+  const direction = camera.position.clone().sub(target).normalize();
+  const originalTarget = target.clone();
+  resizeAvatarPreviewCamera(camera, box, target, 200 / 450);
+  const fitted = camera.clone();
+  fitAvatarPreviewCamera(fitted, box, target, camera.rotation);
+  t.true(Math.abs(camera.position.distanceTo(target) / fitted.position.distanceTo(target) - 0.65) < 1e-10);
+  t.true(camera.position.clone().sub(target).normalize().distanceTo(direction) < 1e-10);
+  t.deepEqual(camera.quaternion.toArray(), rotation.toArray());
+  t.deepEqual(target, originalTarget);
+});
+
+test("resize ignores hidden viewport ratios and works before a model loads", t => {
+  const camera = new PerspectiveCamera(55, 1, 0.1, 1000);
+  for (const aspect of [0, Infinity, NaN, -1]) resizeAvatarPreviewCamera(camera, null, new Vector3(), aspect);
+  t.is(camera.aspect, 1);
+  resizeAvatarPreviewCamera(camera, null, new Vector3(), 0.5);
+  t.is(camera.aspect, 0.5);
+});

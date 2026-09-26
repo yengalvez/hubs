@@ -298,6 +298,7 @@ class UIRoot extends Component {
   }
 
   componentDidUpdate(prevProps) {
+    this.syncBotChatAvailability();
     const { hubChannel, showSignInDialog } = this.props;
     if (prevProps.hubChannel !== hubChannel) {
       if (prevProps.hubChannel) {
@@ -498,7 +499,7 @@ class UIRoot extends Component {
     this._sittingTmpWaypointPos = new THREE.Vector3();
     this._botTmpRigPos = new THREE.Vector3();
     this._botTmpBotPos = new THREE.Vector3();
-    this._botProximityInterval = window.setInterval(this.refreshNearestBot, 1000);
+    this.syncBotChatAvailability();
 
     scene.addEventListener("action_media_tweet", this.onTweet);
   }
@@ -541,6 +542,26 @@ class UIRoot extends Component {
 
   onBotChatCapabilityChanged = () => {
     this.resetBotChatState();
+    this.syncBotChatAvailability();
+  };
+
+  syncBotChatAvailability = () => {
+    const enabled = this.isBotChatEnabled();
+    if (enabled && !this._botProximityInterval && this.playerRig) {
+      this._botProximityInterval = window.setInterval(this.refreshNearestBot, 1000);
+    } else if (!enabled && this._botProximityInterval) {
+      clearInterval(this._botProximityInterval);
+      this._botProximityInterval = null;
+    }
+    if (
+      !enabled &&
+      (this.state.selectedBotForChat ||
+        this.state.nearestBot ||
+        this.state.sidebarId === "bot-chat" ||
+        Object.keys(this.state.botChatSessions).length)
+    ) {
+      this.resetBotChatState();
+    }
   };
 
   resetBotChatState = (additionalState = {}) => {
@@ -1052,8 +1073,8 @@ class UIRoot extends Component {
   getRoomBotsConfig = () => {
     const bots = this.props.hub?.user_data?.bots || {};
 
-    const enabled = !!(bots.enabled || bots["enabled"]);
-    const chatEnabled = !!(bots.chat_enabled || bots["chat_enabled"]);
+    const enabled = bots.enabled === true;
+    const chatEnabled = bots.chat_enabled === true;
     const count = Number(bots.count || bots["count"] || 0) || 0;
 
     return {
@@ -1064,11 +1085,18 @@ class UIRoot extends Component {
   };
 
   isBotChatEnabled = () => {
-    const roomBotsFeatureEnabled = !!configs.feature("enable_room_bots");
-    const botChatFeatureEnabled = !!configs.feature("enable_bot_chat");
+    const roomBotsFeatureEnabled = this.props.hubChannel?.productModules?.bots_enabled === true;
+    const botChatFeatureEnabled = this.props.hubChannel?.productModules?.ai_enabled === true;
     const botsConfig = this.getRoomBotsConfig();
 
-    return roomBotsFeatureEnabled && botChatFeatureEnabled && botsConfig.enabled && botsConfig.chatEnabled;
+    return (
+      roomBotsFeatureEnabled &&
+      botChatFeatureEnabled &&
+      botsConfig.enabled &&
+      botsConfig.chatEnabled &&
+      botsConfig.count > 0 &&
+      !!this.props.hubChannel?.botChatCapability
+    );
   };
 
   refreshNearestBot = () => {
@@ -2152,7 +2180,7 @@ class UIRoot extends Component {
                           onChangeScene={this.onChangeScene}
                         />
                       )}
-                      {this.state.sidebarId === "bot-chat" && this.state.selectedBotForChat && (
+                      {botChatEnabled && this.state.sidebarId === "bot-chat" && this.state.selectedBotForChat && (
                         <BotChatPanelContainer
                           scene={this.props.scene}
                           hubChannel={this.props.hubChannel}
@@ -2281,10 +2309,10 @@ class UIRoot extends Component {
                               selected={this.state.isSitting}
                               onClick={this.toggleSitting}
                             />
-                            {botChatEnabled && (
+                            {canTalkToBot && (
                               <ToolbarButton
                                 icon={<ChatIcon />}
-                                label={<FormattedMessage id="toolbar.bot-talk-button" defaultMessage="Talk" />}
+                                label={<FormattedMessage id="toolbar.bot-talk-button" defaultMessage="Talk with AI" />}
                                 preset="basic"
                                 selected={this.state.sidebarId === "bot-chat"}
                                 disabled={!canTalkToBot}

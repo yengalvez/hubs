@@ -137,7 +137,17 @@ AvatarActionRow.propTypes = {
   children: PropTypes.node
 };
 
-export function MediaTile({ entry, processThumbnailUrl, onClick, onEdit, onShowSimilar, onCopy, onInfo, ...rest }) {
+export function MediaTile({
+  entry,
+  processThumbnailUrl,
+  thumbnailLoading = "lazy",
+  onClick,
+  onEdit,
+  onShowSimilar,
+  onCopy,
+  onInfo,
+  ...rest
+}) {
   const intl = useIntl();
   const creator = entry.attributions && entry.attributions.creator;
   const publisherName =
@@ -200,7 +210,14 @@ export function MediaTile({ entry, processThumbnailUrl, onClick, onEdit, onShowS
             height={thumbnailHeight}
           />
         ) : (
-          <img src={thumbnailUrl} alt={entry.name} width={thumbnailWidth} height={thumbnailHeight} />
+          <img
+            src={thumbnailUrl}
+            alt={entry.name}
+            width={thumbnailWidth}
+            height={thumbnailHeight}
+            loading={thumbnailLoading}
+            decoding="async"
+          />
         )}
       </a>
       {entry.favorited && <StarIcon className={styles.favoriteIcon} />}
@@ -278,6 +295,7 @@ export function MediaTile({ entry, processThumbnailUrl, onClick, onEdit, onShowS
 MediaTile.propTypes = {
   entry: PropTypes.object.isRequired,
   processThumbnailUrl: PropTypes.func,
+  thumbnailLoading: PropTypes.oneOf(["eager", "lazy"]),
   onClick: PropTypes.func,
   onEdit: PropTypes.func,
   onShowSimilar: PropTypes.func,

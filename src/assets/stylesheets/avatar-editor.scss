@@ -400,7 +400,7 @@
 
     .split {
       width: min(1100px, 100%);
-      grid-template-columns: minmax(420px, 3fr) minmax(180px, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 1.25em;
       align-items: start;
     }
@@ -410,7 +410,12 @@
     }
 
     .preview {
-      width: 100%;
+      // Auto-save still needs a sized renderer for validation and thumbnails.
+      position: absolute;
+      visibility: hidden;
+      pointer-events: none;
+      width: 288px;
+      height: 512px;
       max-width: none;
       margin-left: 0;
     }
@@ -481,10 +486,6 @@
       .avaturn-sdk-container {
         height: 72vh;
         min-height: 500px;
-      }
-
-      .preview {
-        height: 320px;
       }
     }
   }

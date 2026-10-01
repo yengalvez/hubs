@@ -7,6 +7,13 @@ const PropTypes = require("prop-types");
 const { createRoot } = require("react-dom/client");
 const { act } = require("react-dom/test-utils");
 const { useBotChatRequest } = require("../../../src/react-components/room/useBotChatRequest");
+// This boundary does not migrate sockets or load the application-wide TS
+// store. Use the same unused-import seam as the existing HubChannel units;
+// the HubChannel/Phoenix dispatch and mounted hook below are actual source.
+const phoenixUtilsPath = require.resolve("../../../src/utils/phoenix-utils");
+require.cache[phoenixUtilsPath] = { id: phoenixUtilsPath, filename: phoenixUtilsPath, loaded: true, exports: {} };
+const HubChannel = require("../../../src/utils/hub-channel").default;
+const { Socket } = require("phoenix");
 
 global.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -193,4 +200,109 @@ test.serial("turning sendingDisabled on aborts transport and suppresses late rep
     ["user"]
   );
   await harness.unmount();
+});
+
+function actualModuleChannel() {
+  const store = { state: { credentials: { token: "fixture-only" } }, addEventListener() {} };
+  const hub = new HubChannel(store, "synthetic-hub");
+  // Never connect/join: exercise actual Phoenix message dispatch, not a
+  // network, authenticated Presence, provider or full browser acceptance.
+  const socket = new Socket("wss://fixture-only.invalid/socket");
+  const transport = socket.channel("hub:synthetic-hub", {});
+  hub.setChannel(transport);
+  hub.configureBotChatCapability(CAPABILITY_A);
+  transport.trigger("product_modules_changed", { bots_enabled: true, ai_enabled: true });
+  return { hub, transport };
+}
+
+test.serial("actual Phoenix modules control delivers in mounted hook", async t => {
+  const { hub } = actualModuleChannel();
+  const calls = [];
+  const messages = [];
+  const harness = await mountHarness(
+    baseProps({
+      hubChannel: hub,
+      requestBotChat: async (...args) => {
+        calls.push(args);
+        return { reply: "current-control-reply", action: { waypoint: "spawbot-control" } };
+      },
+      onAppendMessage: message => messages.push(message)
+    })
+  );
+  t.teardown(async () => {
+    await harness.unmount();
+    hub.disconnect();
+  });
+  t.true(hub.productModules.ai_enabled);
+  t.true(harness.latest.canChat);
+  await act(async () => harness.latest.onSend(submitEvent));
+  t.is(calls.length, 1);
+  t.is(calls[0][2].bot_chat_capability, CAPABILITY_A);
+  t.false(calls[0][3].signal.aborted);
+  t.deepEqual(
+    messages.map(message => message.author),
+    ["user", "bot", "system"]
+  );
+  t.is(messages[1].text, "current-control-reply");
+  t.is(messages[2].text, "Movement requested toward spawbot-control.");
+  t.false(harness.latest.sending);
+});
+
+test.serial("actual Phoenix modules OFF aborts held reply before re-enable", async t => {
+  const { hub, transport } = actualModuleChannel();
+  const calls = [];
+  const messages = [];
+  let release;
+  const held = new Promise(resolve => (release = resolve));
+  const harness = await mountHarness(
+    baseProps({
+      hubChannel: hub,
+      requestBotChat: (...args) => {
+        calls.push(args);
+        return calls.length === 1 ? held : Promise.resolve({ reply: "new-current-reply", action: null });
+      },
+      onAppendMessage: message => messages.push(message)
+    })
+  );
+  t.teardown(async () => {
+    release({ reply: "teardown-only", action: null });
+    await harness.unmount();
+    hub.disconnect();
+  });
+  let pending;
+  await act(async () => {
+    pending = harness.latest.onSend(submitEvent);
+  });
+  t.is(calls.length, 1);
+  t.true(harness.latest.sending);
+  const signal = calls[0][3].signal;
+  const initialEpoch = hub.botChatCapabilityEpoch;
+  await act(async () => transport.trigger("product_modules_changed", { bots_enabled: true, ai_enabled: false }));
+  t.false(hub.productModules.ai_enabled);
+  t.true(hub.botChatCapabilityEpoch > initialEpoch);
+  t.true(signal.aborted);
+  t.false(harness.latest.sending);
+  // The real parent supplies sendingDisabled from its effective module/room
+  // state. Model that prop boundary explicitly; this is not a UIRoot mount.
+  await harness.render({ sendingDisabled: true });
+  t.false(harness.latest.canChat);
+  await act(async () => harness.latest.onSend(submitEvent));
+  t.is(calls.length, 1);
+  const offEpoch = hub.botChatCapabilityEpoch;
+  await act(async () => transport.trigger("product_modules_changed", { bots_enabled: true, ai_enabled: true }));
+  t.true(hub.botChatCapabilityEpoch > offEpoch);
+  await harness.render({ sendingDisabled: false, inputValue: "new message" });
+  await act(async () => {
+    release({ reply: "stale-after-ON", action: { waypoint: "spawbot-old" } });
+    await pending;
+  });
+  t.true(signal.aborted);
+  t.false(messages.some(message => message.author === "bot" || message.author === "system"));
+  await act(async () => harness.latest.onSend(submitEvent));
+  t.is(calls.length, 2);
+  t.not(calls[1][3].signal, signal);
+  t.false(calls[1][3].signal.aborted);
+  t.is(messages.filter(message => message.author === "bot").length, 1);
+  t.is(messages.find(message => message.author === "bot").text, "new-current-reply");
+  t.false(messages.some(message => message.author === "system"));
 });

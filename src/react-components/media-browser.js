@@ -177,9 +177,12 @@ class MediaBrowserContainer extends Component {
     this.props.mediaSearchStore.addEventListener("sourcechanged", this.sourceChanged);
   }
 
-  componentDidMount() {}
+  componentDidMount() {
+    this.unsubscribeProductModules = configs.subscribeToProductModules(() => this.forceUpdate());
+  }
 
   componentWillUnmount() {
+    this.unsubscribeProductModules?.();
     this.props.mediaSearchStore.removeEventListener("statechanged", this.storeUpdated);
     this.props.mediaSearchStore.removeEventListener("sourcechanged", this.sourceChanged);
   }
@@ -370,6 +373,7 @@ class MediaBrowserContainer extends Component {
   };
 
   onCreateAvaturnAvatar = () => {
+    if (configs.feature("enable_avaturn_creator") !== true) return;
     window.dispatchEvent(new CustomEvent("action_create_avaturn_avatar"));
   };
 

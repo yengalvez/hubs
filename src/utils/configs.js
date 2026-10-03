@@ -104,6 +104,38 @@ configs.feature = featureName => {
   }
 };
 
+// Room capabilities only project these three product flags. All other app
+// config (including the creator URL and ordinary GLB import) stays untouched.
+const productModuleListeners = new Set();
+configs.avaturnCreatorEpoch = 0;
+configs.setProductModules = capabilities => {
+  const features = configs.APP_CONFIG.features;
+  const wasAvaturnEnabled = features.enable_avaturn_creator === true;
+  features.enable_room_bots = capabilities?.bots_enabled === true;
+  features.enable_bot_chat = features.enable_room_bots && capabilities?.ai_enabled === true;
+  features.enable_avaturn_creator = capabilities?.avaturn_enabled === true;
+  if (wasAvaturnEnabled !== features.enable_avaturn_creator) configs.avaturnCreatorEpoch += 1;
+  // Notify synchronously, even for OFF/ON in one React batch: pending work
+  // must be revoked at OFF, not merely see the final rendered ON state.
+  let firstError;
+  let failed = false;
+  for (const listener of [...productModuleListeners]) {
+    try {
+      listener();
+    } catch (error) {
+      if (!failed) {
+        firstError = error;
+        failed = true;
+      }
+    }
+  }
+  if (failed) throw firstError;
+};
+configs.subscribeToProductModules = listener => {
+  productModuleListeners.add(listener);
+  return () => productModuleListeners.delete(listener);
+};
+
 configs.image = (imageName, cssUrl) => {
   const configuredImage =
     configs.APP_CONFIG &&

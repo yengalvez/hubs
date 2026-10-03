@@ -18,8 +18,13 @@ export default class AvaturnCreator extends Component {
   state = { status: "loading", error: null };
 
   componentDidMount() {
+    this.unsubscribeProductModules = configs.subscribeToProductModules(this.onProductModulesChanged);
     return this.start();
   }
+
+  onProductModulesChanged = () => {
+    if (!this.isEnabled() || !this.session) this.start();
+  };
 
   componentDidUpdate(previousProps) {
     if (previousProps.creatorUrl !== this.props.creatorUrl || (!this.isEnabled() && this.session)) {
@@ -79,7 +84,10 @@ export default class AvaturnCreator extends Component {
       if (this.unmounted || this.session !== session || !this.isEnabled()) return;
       const sdk = this.sdk;
       if (!sdk) return;
-      sdk.on("export", this.handleExport);
+      sdk.on("export", result => {
+        if (this.unmounted || this.session !== session) return;
+        return this.handleExport(result);
+      });
       sdk.on("error", () => {
         if (this.session === session && !this.exportLocked) {
           this.fail("Avaturn no pudo completar el avatar. Inténtalo de nuevo.");
@@ -99,6 +107,7 @@ export default class AvaturnCreator extends Component {
 
   componentWillUnmount() {
     this.unmounted = true;
+    this.unsubscribeProductModules?.();
     this.stop();
   }
 

@@ -81,7 +81,7 @@ export const resolveUrl = async (url, quality = null, version = 1, bustCache) =>
   return resultPromise;
 };
 
-export const upload = (file, desiredContentType) => {
+export const upload = (file, desiredContentType, { signal } = {}) => {
   const formData = new FormData();
   formData.append("media", file);
   formData.append("promotion_mode", "with_token");
@@ -94,7 +94,8 @@ export const upload = (file, desiredContentType) => {
   // to a reticulum host.
   return fetch(getDirectMediaAPIEndpoint(), {
     method: "POST",
-    body: formData
+    body: formData,
+    ...(signal ? { signal } : {})
   }).then(r => r.json());
 };
 

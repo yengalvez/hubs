@@ -36,6 +36,8 @@ export function RoomSettingsSidebar({
   onChangeScene
 }) {
   const intl = useIntl();
+  const [, setProductModuleVersion] = useState(0);
+  useEffect(() => configs.subscribeToProductModules(() => setProductModuleVersion(version => version + 1)), []);
   const {
     handleSubmit,
     register,
@@ -363,30 +365,36 @@ export function RoomSettingsSidebar({
                 {...register("user_data.bots.mobility")}
               />
             </RadioInputField>
-            <ToggleInput
-              label={<FormattedMessage id="room-settings-sidebar.bots-chat-enabled" defaultMessage="Enable bot chat" />}
-              disabled={!botsEnabled || !botChatFeatureEnabled}
-              description={
-                <FormattedMessage
-                  id="room-settings-sidebar.bots-chat-enabled-description"
-                  defaultMessage="Allow private chat panels with nearby bots."
+            {botChatFeatureEnabled && (
+              <>
+                <ToggleInput
+                  label={
+                    <FormattedMessage id="room-settings-sidebar.bots-chat-enabled" defaultMessage="Enable bot chat" />
+                  }
+                  disabled={!botsEnabled}
+                  description={
+                    <FormattedMessage
+                      id="room-settings-sidebar.bots-chat-enabled-description"
+                      defaultMessage="Allow private chat panels with nearby bots."
+                    />
+                  }
+                  {...register("user_data.bots.chat_enabled")}
                 />
-              }
-              {...register("user_data.bots.chat_enabled")}
-            />
-            <TextAreaInputField
-              disabled={!botsEnabled || !botChatFeatureEnabled || !botChatEnabled}
-              placeholder={intl.formatMessage({
-                id: "room-settings-sidebar.bots-prompt-placeholder",
-                defaultMessage: "Describe the bot's role, tone and room-specific knowledge."
-              })}
-              label={<FormattedMessage id="room-settings-sidebar.bots-prompt" defaultMessage="Bot instructions" />}
-              minRows={4}
-              maxLength={1500}
-              error={errors?.user_data?.bots?.prompt?.message}
-              fullWidth
-              {...register("user_data.bots.prompt", { maxLength: 1500 })}
-            />
+                <TextAreaInputField
+                  disabled={!botsEnabled || !botChatEnabled}
+                  placeholder={intl.formatMessage({
+                    id: "room-settings-sidebar.bots-prompt-placeholder",
+                    defaultMessage: "Describe the bot's role, tone and room-specific knowledge."
+                  })}
+                  label={<FormattedMessage id="room-settings-sidebar.bots-prompt" defaultMessage="Bot instructions" />}
+                  minRows={4}
+                  maxLength={1500}
+                  error={errors?.user_data?.bots?.prompt?.message}
+                  fullWidth
+                  {...register("user_data.bots.prompt", { maxLength: 1500 })}
+                />
+              </>
+            )}
           </InputField>
         )}
         <ApplyButton type="submit" />

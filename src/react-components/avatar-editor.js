@@ -136,7 +136,7 @@ class AvatarEditor extends Component {
       avatarSkeletonMetadata: null,
       avaturnValidationError: null,
       uploadError: null,
-      avatar: { ...avatar, files: { ...avatar.files, glb: null } }
+      avatar: { ...avatar, files: { ...avatar?.files, glb: null } }
     }));
   };
 
@@ -172,8 +172,9 @@ class AvatarEditor extends Component {
 
   acceptAvaturnFile = async file => {
     if (this.unmounted || !this.isAvaturnEnabled() || this.uploadInFlight || this.savedAvaturn) return false;
+    const selectionId = this.glbSelectionId;
     const accepted = await this.acceptCreatorFile(file);
-    if (!accepted) this.avaturnAutoSavePending = false;
+    if (!accepted && selectionId === this.glbSelectionId) this.avaturnAutoSavePending = false;
     return accepted;
   };
 
@@ -182,8 +183,27 @@ class AvatarEditor extends Component {
     this.setState({ avaturnSaveState: "error" });
   };
 
+  onProductModulesChanged = () => {
+    if (this.props.mode !== "avaturn") return;
+    if (!this.isAvaturnEnabled()) {
+      clearTimeout(this.avaturnAutoSaveTimer);
+      clearTimeout(this.avaturnSuccessTimer);
+      this.avaturnAutoSavePending = false;
+      this.avaturnSaveController?.abort();
+      this.invalidateCreatorFile();
+      this.setState({
+        uploading: false,
+        avaturnSaveState: this.savedAvaturn ? "saved" : null,
+        avaturnSaveAttempted: false
+      });
+    }
+    this.forceUpdate();
+  };
+
   componentWillUnmount() {
     this.unmounted = true;
+    this.unsubscribeProductModules?.();
+    this.avaturnSaveController?.abort();
     clearTimeout(this.avaturnAutoSaveTimer);
     clearTimeout(this.avaturnSuccessTimer);
     this.glbSelectionId++;
@@ -194,6 +214,7 @@ class AvatarEditor extends Component {
 
   componentDidMount = async () => {
     this.unmounted = false;
+    this.unsubscribeProductModules = configs.subscribeToProductModules(this.onProductModulesChanged);
     if (this.props.avatarId) {
       const avatar = await fetchAvatar(this.props.avatarId);
       avatar.creatorAttribution = (avatar.attributions && avatar.attributions.creator) || "";
@@ -235,11 +256,12 @@ class AvatarEditor extends Component {
     }
   };
 
-  createOrUpdateAvatar = avatar => {
+  createOrUpdateAvatar = (avatar, signal) => {
     return fetchReticulumAuthenticated(
       avatar.avatar_id ? `${AVATARS_API}/${avatar.avatar_id}` : AVATARS_API,
       avatar.avatar_id ? "PUT" : "POST",
-      { avatar }
+      { avatar },
+      { signal }
     ).then(({ avatars }) => avatars[0]);
   };
 
@@ -262,6 +284,8 @@ class AvatarEditor extends Component {
     }
 
     this.uploadInFlight = true;
+    const controller = isAvaturnMode ? new AbortController() : null;
+    this.avaturnSaveController = controller;
     const selectionId = this.glbSelectionId;
     const isCurrent = () =>
       !this.unmounted && selectionId === this.glbSelectionId && (!isAvaturnMode || this.isAvaturnEnabled());
@@ -284,8 +308,10 @@ class AvatarEditor extends Component {
           gltfLoader.load(
             gltfUrl,
             result => {
-              this.inputFiles.gltf = result.files.gltf;
-              this.inputFiles.bin = result.files.bin;
+              if (!isAvaturnMode || isCurrent()) {
+                this.inputFiles.gltf = result.files.gltf;
+                this.inputFiles.bin = result.files.bin;
+              }
               resolve(result);
             },
             undefined,
@@ -312,7 +338,11 @@ class AvatarEditor extends Component {
       const filesToUpload = ["gltf", "bin", "base_map", "emissive_map", "normal_map", "orm_map", "thumbnail"].filter(
         k => this.inputFiles[k] === null || this.inputFiles[k] instanceof File
       );
-      const fileUploads = await Promise.all(filesToUpload.map(f => this.inputFiles[f] && upload(this.inputFiles[f])));
+      const fileUploads = await Promise.all(
+        filesToUpload.map(
+          f => this.inputFiles[f] && upload(this.inputFiles[f], undefined, { signal: controller?.signal })
+        )
+      );
       if (!isCurrent()) return;
       const avatar = {
         ...this.state.avatar,
@@ -329,7 +359,8 @@ class AvatarEditor extends Component {
           .reduce((o, [k, v]) => ({ ...o, [k]: v }), {})
       };
 
-      const savedAvatar = await this.createOrUpdateAvatar(avatar);
+      const savedAvatar = await this.createOrUpdateAvatar(avatar, controller?.signal);
+      if (isAvaturnMode && !isCurrent()) return;
       // Terminal before setState/onSave: neither a queued Next nor a form submit
       // during the success notice may create a second avatar.
       if (isAvaturnMode) this.savedAvaturn = savedAvatar;
@@ -342,11 +373,11 @@ class AvatarEditor extends Component {
         }
         clearTimeout(this.avaturnSuccessTimer);
         this.avaturnSuccessTimer = setTimeout(() => {
-          if (!this.unmounted) this.props.onSave(savedAvatar);
+          if (isCurrent()) this.props.onSave(savedAvatar);
         }, 1400);
       });
     } catch (error) {
-      if (this.unmounted) return;
+      if (this.unmounted || (isAvaturnMode && !isCurrent())) return;
       console.error("Failed to upload avatar.", error);
       this.setState({
         uploading: false,
@@ -354,6 +385,7 @@ class AvatarEditor extends Component {
         uploadError: error && error.message ? error.message : "No se pudo subir el avatar. Inténtalo de nuevo."
       });
     } finally {
+      if (this.avaturnSaveController === controller) this.avaturnSaveController = null;
       this.uploadInFlight = false;
       revokeObjectUrl(gltfUrl);
     }

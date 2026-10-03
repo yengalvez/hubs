@@ -47,7 +47,8 @@ export default class HubChannel extends EventTarget {
     this._signedIn = !!this.store.state.credentials.token;
     this._permissions = {};
     this._blockedSessionIds = new Set();
-    this.productModules = { bots_enabled: false, ai_enabled: false };
+    this.productModules = { bots_enabled: false, ai_enabled: false, avaturn_enabled: false };
+    configs.setProductModules(this.productModules);
     this._botChatCapabilityState = new BotChatCapabilityState(detail => {
       this.dispatchEvent(new CustomEvent("bot_chat_capability_changed", { detail }));
     });
@@ -187,11 +188,17 @@ export default class HubChannel extends EventTarget {
   configureProductModules = capabilities => {
     this.productModules = {
       bots_enabled: capabilities?.bots_enabled === true,
-      ai_enabled: capabilities?.bots_enabled === true && capabilities?.ai_enabled === true
+      ai_enabled: capabilities?.bots_enabled === true && capabilities?.ai_enabled === true,
+      avaturn_enabled: capabilities?.avaturn_enabled === true
     };
     // Rotate the local admission epoch even for OFF/ON pulses with the same
     // session token, cancelling pending UI requests and ephemeral history.
-    this.configureBotChatCapability(this.botChatCapability);
+    // A UI listener failure must not skip this security boundary.
+    try {
+      configs.setProductModules(this.productModules);
+    } finally {
+      this.configureBotChatCapability(this.botChatCapability);
+    }
   };
 
   configureWaypointReservations(capability) {

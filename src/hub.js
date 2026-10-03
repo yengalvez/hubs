@@ -893,9 +893,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("action_create_avaturn_avatar", () => {
     if (!configs.feature("enable_avaturn_creator") || !normalizeAvaturnCreatorUrl(configs.link("avaturn_creator", "")))
       return;
+    const avaturnCreatorEpoch = configs.avaturnCreatorEpoch;
     performConditionalSignIn(
       () => hubChannel.signedIn,
-      () => pushHistoryState(history, "overlay", "avatar-editor", { mode: "avaturn" }),
+      () => {
+        if (configs.avaturnCreatorEpoch !== avaturnCreatorEpoch || configs.feature("enable_avaturn_creator") !== true)
+          return;
+        pushHistoryState(history, "overlay", "avatar-editor", { mode: "avaturn" });
+      },
       SignInMessages.createAvatar
     );
   });

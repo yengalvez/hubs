@@ -7,9 +7,15 @@ const React = require("react");
 const { createRoot } = require("react-dom/client");
 const { act } = require("react-dom/test-utils");
 const { IntlProvider } = require("react-intl");
+const configs = require("../../../src/utils/configs").default;
+const phoenixUtilsPath = require.resolve("../../../src/utils/phoenix-utils");
+require.cache[phoenixUtilsPath] = { id: phoenixUtilsPath, filename: phoenixUtilsPath, loaded: true, exports: {} };
+const HubChannel = require("../../../src/utils/hub-channel").default;
+const { Socket } = require("phoenix");
 
 let sdkInstance;
-let enabled = true;
+let hub;
+let transport;
 let initialization;
 let exportWork;
 let receivedSignal;
@@ -42,7 +48,6 @@ class FakeAvaturnSDK {
 }
 
 const stubs = {
-  "../utils/configs": { feature: () => enabled },
   "../utils/avaturn-sdk": {
     loadAvaturnSdk: async () => {
       sdkLoads++;
@@ -78,11 +83,19 @@ test.after.always(() => {
   global.IS_REACT_ACT_ENVIRONMENT = originalAct;
 });
 
+function setAvaturnEnabled(enabled) {
+  transport.trigger("product_modules_changed", { bots_enabled: true, ai_enabled: true, avaturn_enabled: enabled });
+}
+
 test.beforeEach(() => {
-  enabled = true;
+  hub = new HubChannel({ state: { credentials: {} }, addEventListener() {} }, "avaturn-profile");
+  transport = new Socket("wss://local.invalid/socket").channel("hub:avaturn-profile", {});
+  hub.setChannel(transport);
+  setAvaturnEnabled(true);
   initialization = exportWork = receivedSignal = null;
   sdkLoads = 0;
 });
+test.afterEach.always(async () => act(async () => hub.disconnect()));
 
 function component(props = {}) {
   const instance = new AvaturnCreator({
@@ -169,15 +182,18 @@ test.serial("a development remount cannot let the discarded SDK replace the acti
 });
 
 test.serial("OFF and invalid URLs do not even load the SDK on direct mount", async t => {
-  enabled = false;
+  setAvaturnEnabled(false);
   const off = component();
   await off.componentDidMount();
   t.is(off.state.status, "unavailable");
-  enabled = true;
+  t.is(sdkLoads, 0);
+  // These are separate direct-mount cases. Leaving the OFF fixture subscribed
+  // would legitimately reactivate it when enabling the invalid-URL case.
+  off.componentWillUnmount();
+  setAvaturnEnabled(true);
   const invalid = component({ creatorUrl: "https://evil.example" });
   await invalid.componentDidMount();
   t.is(sdkLoads, 0);
-  off.componentWillUnmount();
   invalid.componentWillUnmount();
 });
 
@@ -284,12 +300,100 @@ test.serial("unmount cancels an unresolved handshake; a late init cannot registe
 test.serial("switching OFF during a session destroys the iframe and SDK", async t => {
   const instance = component();
   await instance.componentDidMount();
-  enabled = false;
-  instance.componentDidUpdate(instance.props);
+  setAvaturnEnabled(false);
   t.true(sdkInstance.destroyed);
   t.is(instance.session, null);
   t.is(instance.state.status, "unavailable");
   instance.componentWillUnmount();
+});
+
+test.serial("mounted creator follows Completo to BASE and creator-only ON without manual lifecycle calls", async t => {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  let exports = 0;
+  let finish;
+  exportWork = new Promise(resolve => (finish = resolve));
+  await act(async () => {
+    root.render(
+      <IntlProvider locale="en">
+        <AvaturnCreator creatorUrl="https://yenhubs.avaturn.dev" onExport={async () => ++exports} />
+      </IntlProvider>
+    );
+    await new Promise(resolve => setImmediate(resolve));
+  });
+  t.teardown(async () => {
+    finish(exportedFile);
+    await act(async () => root.unmount());
+    container.remove();
+  });
+  const discarded = sdkInstance;
+  let pending;
+  await act(async () => {
+    pending = discarded.callbacks.export({});
+  });
+  const signal = receivedSignal;
+  await act(async () => transport.trigger("product_modules_changed", null));
+  t.true(signal.aborted);
+  t.true(discarded.destroyed);
+  t.regex(container.textContent, /no está disponible/);
+  t.is(sdkLoads, 1);
+
+  await act(async () => {
+    transport.trigger("product_modules_changed", { bots_enabled: false, ai_enabled: false, avaturn_enabled: true });
+    await new Promise(resolve => setImmediate(resolve));
+  });
+  t.false(configs.feature("enable_room_bots"));
+  t.false(configs.feature("enable_bot_chat"));
+  t.is(sdkLoads, 2, "Avaturn restarts independently from bots and AI");
+  t.not(sdkInstance, discarded);
+  exportWork = null;
+  await act(async () => {
+    finish(exportedFile);
+    await pending;
+    await discarded.callbacks.export({});
+  });
+  t.is(exports, 0, "neither a held export nor a stale SDK callback is admitted after ON");
+  await act(async () => sdkInstance.callbacks.export({}));
+  t.is(exports, 1, "only the new live SDK can export");
+});
+
+test.serial("a batched OFF-ON pulse destroys pending SDK initialization before ON and close revokes it", async t => {
+  let finish;
+  initialization = new Promise(resolve => (finish = resolve));
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  await act(async () => {
+    root.render(
+      <IntlProvider locale="en">
+        <AvaturnCreator creatorUrl="https://yenhubs.avaturn.dev" onExport={async () => true} />
+      </IntlProvider>
+    );
+    await new Promise(resolve => setImmediate(resolve));
+  });
+  t.teardown(async () => {
+    finish();
+    await act(async () => root.unmount());
+  });
+  const first = sdkInstance;
+  await act(async () => {
+    setAvaturnEnabled(false);
+    t.true(first.destroyed, "OFF cancels synchronously, before React can batch ON");
+    initialization = null;
+    setAvaturnEnabled(true);
+    await new Promise(resolve => setImmediate(resolve));
+  });
+  const current = sdkInstance;
+  t.not(current, first);
+  t.truthy(current.callbacks.export);
+  await act(async () => {
+    finish();
+    await new Promise(resolve => setImmediate(resolve));
+  });
+  t.falsy(first.callbacks.export);
+  await act(async () => transport.trigger("phx_close", {}));
+  t.true(current.destroyed);
+  t.regex(container.textContent, /no está disponible/);
 });
 
 test.serial("init timeout destroys the stalled SDK and explicit retry initializes a fresh one", async t => {

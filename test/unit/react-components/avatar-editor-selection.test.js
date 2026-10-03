@@ -11,6 +11,11 @@ const { createRoot } = require("react-dom/client");
 const { act } = require("react-dom/test-utils");
 const { IntlProvider } = require("react-intl");
 const { MAX_AVATAR_GLB_BYTES } = require("../../../src/utils/avatar-glb-utils");
+const configs = require("../../../src/utils/configs").default;
+const phoenixUtilsPath = require.resolve("../../../src/utils/phoenix-utils");
+require.cache[phoenixUtilsPath] = { id: phoenixUtilsPath, filename: phoenixUtilsPath, loaded: true, exports: {} };
+const HubChannel = require("../../../src/utils/hub-channel").default;
+const { Socket } = require("phoenix");
 
 // Exercise the mounted editor and real file/skeleton validators. Rendering,
 // parsing and transport are isolated: these are not real-avatar acceptance tests.
@@ -18,12 +23,15 @@ const urls = new Map();
 const parsedFiles = [];
 const uploadedFiles = [];
 const savedAvatars = [];
+const uploadSignals = [];
+const saveSignals = [];
 let nextUrl = 0;
-let avaturnEnabled = true;
-let avaturnUrl = "https://yenhubs.avaturn.dev";
+let hub;
+let transport;
 let avaturnCreatorProps;
 let saveFailure = false;
 let saveBarrier;
+let uploadBarrier;
 
 function gltfFixture(compatible = true) {
   const names = compatible
@@ -66,10 +74,10 @@ const stubs = {
     avaturnCreatorProps = props;
     return <div data-testid="avaturn-creator" />;
   },
-  "../utils/configs": { link: () => avaturnUrl, feature: () => avaturnEnabled },
   "./if-feature": () => null,
   "../utils/phoenix-utils": {
-    fetchReticulumAuthenticated: async (_url, _method, { avatar }) => {
+    fetchReticulumAuthenticated: async (_url, _method, { avatar }, { signal } = {}) => {
+      saveSignals.push(signal);
       if (saveBarrier) await saveBarrier;
       if (saveFailure) throw new Error("Save temporarily unavailable");
       savedAvatars.push(avatar);
@@ -77,8 +85,10 @@ const stubs = {
     }
   },
   "../utils/media-utils": {
-    upload: async file => {
+    upload: async (file, _desiredContentType, { signal } = {}) => {
       uploadedFiles.push(file);
+      uploadSignals.push(signal);
+      if (uploadBarrier) await uploadBarrier;
       return { file_id: file.name, meta: { access_token: "test-only", promotion_token: "test-only" } };
     }
   },
@@ -136,12 +146,21 @@ test.after.always(() => {
   global.IS_REACT_ACT_ENVIRONMENT = originalGlobals.act;
 });
 
+function setAvaturnEnabled(enabled) {
+  transport.trigger("product_modules_changed", { bots_enabled: false, ai_enabled: false, avaturn_enabled: enabled });
+}
+
 test.beforeEach(() => {
-  avaturnEnabled = true;
-  avaturnUrl = "https://yenhubs.avaturn.dev";
+  hub = new HubChannel({ state: { credentials: {} }, addEventListener() {} }, "avatar-profile");
+  transport = new Socket("wss://local.invalid/socket").channel("hub:avatar-profile", {});
+  hub.setChannel(transport);
+  configs.APP_CONFIG.links = { avaturn_creator: "https://yenhubs.avaturn.dev" };
+  setAvaturnEnabled(true);
   saveFailure = false;
-  saveBarrier = null;
+  saveBarrier = uploadBarrier = null;
+  uploadSignals.length = saveSignals.length = 0;
 });
+test.afterEach.always(async () => act(async () => hub.disconnect()));
 
 function headerFile(name = "valid.glb") {
   const bytes = new Uint8Array(12);
@@ -417,7 +436,7 @@ test.serial("Avaturn export validates, previews, confirms and saves privately wi
 });
 
 test.serial("direct/history Avaturn editor mount with OFF or invalid URL never mounts creator", async t => {
-  avaturnEnabled = false;
+  setAvaturnEnabled(false);
   const off = await mount(t, "avaturn");
   t.falsy(off.container.querySelector('[data-testid="avaturn-creator"]'));
   t.regex(off.container.textContent, /no está disponible/);
@@ -425,8 +444,8 @@ test.serial("direct/history Avaturn editor mount with OFF or invalid URL never m
   t.false(await off.editor.acceptAvaturnFile(headerFile()));
   await off.submit();
   t.is(savedAvatars.length, 0);
-  avaturnEnabled = true;
-  avaturnUrl = "https://evil.example";
+  setAvaturnEnabled(true);
+  configs.APP_CONFIG.links.avaturn_creator = "https://evil.example";
   const invalid = await mount(t, "avaturn");
   t.falsy(invalid.container.querySelector('[data-testid="avaturn-creator"]'));
 });
@@ -486,3 +505,147 @@ test.serial("a failed Avaturn save can retry, with concurrent retries coalesced"
   await h.submit();
   t.is(savedAvatars.length, 1);
 });
+
+test.serial(
+  "mounted Avaturn OFF-ON discards a held header and queued autosave while normal GLB stays usable",
+  async t => {
+    const privateEditor = await mount(t, "private-glb");
+    const normalFile = headerFile("normal.glb");
+    await privateEditor.select(normalFile);
+    await privateEditor.ready();
+    const h = await mount(t, "avaturn");
+    const pending = await deferredHeaderFile();
+    let accepting;
+    await act(async () => {
+      h.editor.handleAvaturnExportStart();
+      accepting = h.editor.acceptAvaturnFile(pending.file);
+    });
+    await act(async () => {
+      setAvaturnEnabled(false);
+      setAvaturnEnabled(true);
+      pending.release();
+      t.false(await accepting);
+    });
+    t.falsy(h.editor.inputFiles.glb);
+    t.falsy(h.editor.state.previewGltfUrl);
+    t.false(h.editor.avaturnAutoSavePending);
+    t.is(privateEditor.editor.inputFiles.glb, normalFile);
+    t.false(privateEditor.save.disabled, "the independent normal GLB editor remains available");
+
+    await act(async () => {
+      h.editor.handleAvaturnExportStart();
+      await h.editor.acceptAvaturnFile(headerFile("before-off.glb"));
+      h.editor.handleGltfLoaded(gltfFixture());
+      setAvaturnEnabled(false);
+    });
+    await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+    t.is(uploadedFiles.length, 0);
+    t.falsy(h.container.querySelector('[data-testid="avaturn-creator"]'));
+    t.regex(h.container.textContent, /no está disponible/);
+    await privateEditor.submit();
+    t.deepEqual(parsedFiles, [normalFile]);
+    t.is(savedAvatars.length, 1);
+    t.true(
+      uploadSignals.every(signal => signal === undefined),
+      "ordinary GLB uploads do not inherit Avaturn cancellation"
+    );
+  }
+);
+
+test.serial(
+  "OFF aborts only the mounted Avaturn media requests and a late upload cannot create an avatar after ON",
+  async t => {
+    let release;
+    uploadBarrier = new Promise(resolve => (release = resolve));
+    let callbacks = 0;
+    const h = await mount(t, "avaturn", () => callbacks++);
+    await act(async () => {
+      h.editor.handleAvaturnExportStart();
+      await h.editor.acceptAvaturnFile(headerFile());
+    });
+    await h.ready();
+    await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+    t.is(uploadSignals.length, 3);
+    t.true(uploadSignals.every(signal => signal && !signal.aborted));
+    await act(async () => {
+      setAvaturnEnabled(false);
+      t.true(
+        uploadSignals.every(signal => signal.aborted),
+        "actual editor upload callsites share its revocable signal"
+      );
+      setAvaturnEnabled(true);
+      release();
+      await new Promise(resolve => setImmediate(resolve));
+    });
+    t.is(saveSignals.length, 0);
+    t.is(savedAvatars.length, 0);
+    t.is(callbacks, 0);
+    t.falsy(h.editor.state.avaturnSaveState);
+    t.false(h.editor.state.uploading);
+    t.false(h.editor.uploadInFlight);
+  }
+);
+
+test.serial("an old Avaturn header rejected after OFF-ON cannot clear the new export's pending autosave", async t => {
+  const h = await mount(t, "avaturn");
+  const old = await deferredHeaderFile();
+  let acceptingOld;
+  await act(async () => {
+    h.editor.handleAvaturnExportStart();
+    acceptingOld = h.editor.acceptAvaturnFile(old.file);
+  });
+  const newest = headerFile("after-on.glb");
+  await act(async () => {
+    setAvaturnEnabled(false);
+    setAvaturnEnabled(true);
+    h.editor.handleAvaturnExportStart();
+    t.true(await h.editor.acceptAvaturnFile(newest));
+  });
+  t.true(h.editor.avaturnAutoSavePending);
+  const newestPreviewUrl = h.editor.state.previewGltfUrl;
+  await act(async () => {
+    old.release();
+    t.false(await acceptingOld);
+  });
+  t.true(h.editor.avaturnAutoSavePending, "the stale A rejection cannot revoke B's accepted autosave");
+  t.is(h.editor.inputFiles.glb, newest);
+  t.is(h.editor.state.previewGltfUrl, newestPreviewUrl);
+  t.is(urls.get(newestPreviewUrl), newest);
+  t.is(savedAvatars.length, 0);
+  await h.ready();
+  await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+  t.deepEqual(parsedFiles, [newest]);
+  t.is(savedAvatars.length, 1);
+  t.is(h.editor.state.avaturnSaveState, "saved");
+});
+
+test.serial(
+  "OFF aborts the Avaturn avatar save and ignores its late response after ON without claiming server rollback",
+  async t => {
+    let release;
+    saveBarrier = new Promise(resolve => (release = resolve));
+    let callbacks = 0;
+    const h = await mount(t, "avaturn", () => callbacks++);
+    await act(async () => {
+      h.editor.handleAvaturnExportStart();
+      await h.editor.acceptAvaturnFile(headerFile());
+    });
+    await h.ready();
+    await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+    t.is(saveSignals.length, 1);
+    const signal = saveSignals[0];
+    t.false(signal.aborted);
+    await act(async () => {
+      setAvaturnEnabled(false);
+      t.true(signal.aborted);
+      setAvaturnEnabled(true);
+      release();
+      await new Promise(resolve => setImmediate(resolve));
+    });
+    t.is(savedAvatars.length, 1, "an abort cannot undo a write the server may already have made");
+    t.falsy(h.editor.savedAvaturn, "the stale response cannot update the live editor");
+    t.falsy(h.editor.state.avaturnSaveState);
+    t.false(h.editor.state.uploading);
+    t.is(callbacks, 0);
+  }
+);

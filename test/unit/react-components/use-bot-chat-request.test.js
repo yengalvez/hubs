@@ -19,6 +19,27 @@ global.IS_REACT_ACT_ENVIRONMENT = true;
 
 const CAPABILITY_A = "A".repeat(32);
 const CAPABILITY_B = "B".repeat(32);
+let forwardedModuleEvents;
+
+test.before(() => {
+  // Standalone Hubs stays Node-only. The root's pure cross-source driver may
+  // supply ONLY the closed mapping produced by the compiled backend clause.
+  const names = ["product_modules_changed", "avaturn_capabilities_changed"];
+  const mapping =
+    process.env.YENHUBS_TEST_MODULE_EVENT_MAP !== undefined
+      ? JSON.parse(process.env.YENHUBS_TEST_MODULE_EVENT_MAP)
+      : Object.fromEntries(names.map(name => [name, name]));
+  if (
+    !mapping ||
+    typeof mapping !== "object" ||
+    Array.isArray(mapping) ||
+    Object.keys(mapping).length !== names.length ||
+    !names.every(name => Object.prototype.hasOwnProperty.call(mapping, name) && mapping[name] === name)
+  ) {
+    throw new Error("invalid test-only backend event mapping");
+  }
+  forwardedModuleEvents = new Map(Object.entries(mapping));
+});
 
 class FakeHubChannel extends window.EventTarget {
   constructor(capability = null) {
@@ -211,8 +232,131 @@ function actualModuleChannel() {
   const transport = socket.channel("hub:synthetic-hub", {});
   hub.setChannel(transport);
   hub.configureBotChatCapability(CAPABILITY_A);
-  transport.trigger("product_modules_changed", { bots_enabled: true, ai_enabled: true });
+  transport.trigger("product_modules_changed", { bots_enabled: true, ai_enabled: true, avaturn_enabled: true });
   return { hub, transport };
+}
+
+test.serial("actual Phoenix creator OFF-ON keeps an admitted mounted chat request and its epoch", async t => {
+  const { hub, transport } = actualModuleChannel();
+  const messages = [];
+  let release;
+  let signal;
+  const harness = await mountHarness(
+    baseProps({
+      hubChannel: hub,
+      requestBotChat: (_url, _method, _body, options) => {
+        signal = options.signal;
+        return new Promise(resolve => (release = resolve));
+      },
+      onAppendMessage: message => messages.push(message)
+    })
+  );
+  t.teardown(async () => {
+    release({ reply: "teardown-only", action: null });
+    await harness.unmount();
+    hub.disconnect();
+  });
+  let pending;
+  await act(async () => {
+    pending = harness.latest.onSend(submitEvent);
+  });
+  const epoch = hub.botChatCapabilityEpoch;
+  const wireEvent = forwardedModuleEvents.get("avaturn_capabilities_changed");
+  for (const enabled of [false, true]) {
+    await act(async () =>
+      transport.trigger(wireEvent, { bots_enabled: true, ai_enabled: true, avaturn_enabled: enabled })
+    );
+    t.is(hub.productModules.avaturn_enabled, enabled);
+    t.false(signal.aborted);
+    t.is(hub.botChatCapabilityEpoch, epoch);
+    t.true(harness.latest.sending);
+  }
+  await act(async () => {
+    release({ reply: "creator-independent-reply", action: null });
+    await pending;
+  });
+  t.true(messages.some(message => message.text === "creator-independent-reply"));
+  t.false(harness.latest.sending);
+});
+
+for (const [name, event, payloads] of [
+  [
+    "equal general snapshot",
+    "product_modules_changed",
+    [{ bots_enabled: true, ai_enabled: true, avaturn_enabled: true }]
+  ],
+  [
+    "bots OFF-ON pulse",
+    "product_modules_changed",
+    [
+      { bots_enabled: false, ai_enabled: false, avaturn_enabled: true },
+      { bots_enabled: true, ai_enabled: true, avaturn_enabled: true }
+    ]
+  ],
+  [
+    "IA OFF-ON pulse",
+    "product_modules_changed",
+    [
+      { bots_enabled: true, ai_enabled: false, avaturn_enabled: true },
+      { bots_enabled: true, ai_enabled: true, avaturn_enabled: true }
+    ]
+  ],
+  ["malformed creator snapshot", "avaturn_capabilities_changed", [{ bots_enabled: true, ai_enabled: true }]],
+  [
+    "creator bots drift",
+    "avaturn_capabilities_changed",
+    [{ bots_enabled: false, ai_enabled: false, avaturn_enabled: true }]
+  ],
+  [
+    "contradictory creator snapshot",
+    "avaturn_capabilities_changed",
+    [{ bots_enabled: false, ai_enabled: true, avaturn_enabled: true }]
+  ],
+  ["channel error", "phx_error", [{}]],
+  ["channel close", "phx_close", [{}]]
+]) {
+  test.serial(`actual Phoenix ${name} still aborts and suppresses a held mounted reply`, async t => {
+    const { hub, transport } = actualModuleChannel();
+    const messages = [];
+    let release;
+    let signal;
+    const harness = await mountHarness(
+      baseProps({
+        hubChannel: hub,
+        requestBotChat: (_url, _method, _body, options) => {
+          signal = options.signal;
+          return new Promise(resolve => (release = resolve));
+        },
+        onAppendMessage: message => messages.push(message)
+      })
+    );
+    t.teardown(async () => {
+      release({ reply: "teardown-only", action: null });
+      await harness.unmount();
+      hub.disconnect();
+    });
+    let pending;
+    await act(async () => {
+      pending = harness.latest.onSend(submitEvent);
+    });
+    const epoch = hub.botChatCapabilityEpoch;
+    const wireEvent = forwardedModuleEvents.get(event) || event;
+    await act(async () => {
+      for (const payload of payloads) transport.trigger(wireEvent, payload);
+    });
+    t.true(hub.botChatCapabilityEpoch > epoch);
+    t.true(signal.aborted);
+    t.is(hub.botChatCapability, CAPABILITY_A, "equal-token events still revoke the local request");
+    await act(async () => {
+      release({ reply: "stale-held-reply", action: { waypoint: "spawbot-old" } });
+      await pending;
+    });
+    t.deepEqual(
+      messages.map(message => message.author),
+      ["user"]
+    );
+    t.false(harness.latest.sending);
+  });
 }
 
 test.serial("actual Phoenix modules control delivers in mounted hook", async t => {

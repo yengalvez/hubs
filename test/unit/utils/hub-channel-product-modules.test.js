@@ -120,6 +120,64 @@ test.serial("OFF-ON notifies synchronously and rotates both admission epochs eve
   t.is(configs.avaturnCreatorEpoch, creatorEpoch + 2);
 });
 
+test.serial("creator-only OFF-ON projects across all six profiles without rotating chat admission", t => {
+  const { hub, transport } = moduleChannel();
+  t.teardown(() => hub.disconnect());
+  hub.configureBotChatCapability("A".repeat(32));
+  for (const [bots, ai] of [
+    [false, false],
+    [true, false],
+    [true, true]
+  ]) {
+    transport.trigger("product_modules_changed", { bots_enabled: bots, ai_enabled: ai, avaturn_enabled: true });
+    const epoch = hub.botChatCapabilityEpoch;
+    const creatorEpoch = configs.avaturnCreatorEpoch;
+    for (const avaturn of [false, true]) {
+      transport.trigger("avaturn_capabilities_changed", {
+        bots_enabled: bots,
+        ai_enabled: ai,
+        avaturn_enabled: avaturn
+      });
+      t.deepEqual(hub.productModules, { bots_enabled: bots, ai_enabled: ai, avaturn_enabled: avaturn });
+      t.is(configs.feature("enable_room_bots"), bots);
+      t.is(configs.feature("enable_bot_chat"), ai);
+      t.is(configs.feature("enable_avaturn_creator"), avaturn);
+      t.is(hub.botChatCapabilityEpoch, epoch);
+    }
+    t.is(configs.avaturnCreatorEpoch, creatorEpoch + 2);
+  }
+});
+
+test.serial("malformed or drifting creator snapshots revoke instead of inventing bots/IA authority", t => {
+  const { hub, transport } = moduleChannel();
+  t.teardown(() => hub.disconnect());
+  hub.configureBotChatCapability("A".repeat(32));
+  for (const payload of [
+    null,
+    undefined,
+    {},
+    [],
+    Object.assign([], { bots_enabled: true, ai_enabled: true, avaturn_enabled: true }),
+    Object.assign(Object.create({ bots_enabled: true, ai_enabled: true, avaturn_enabled: true }), { a: 1, b: 2, c: 3 }),
+    { bots_enabled: true, ai_enabled: true },
+    { bots_enabled: true, ai_enabled: true, avaturn_enabled: "true" },
+    { bots_enabled: "true", ai_enabled: true, avaturn_enabled: true },
+    { bots_enabled: true, ai_enabled: true, avaturn_enabled: true, unexpected: true },
+    { bots_enabled: false, ai_enabled: true, avaturn_enabled: true },
+    { bots_enabled: false, ai_enabled: false, avaturn_enabled: true }
+  ]) {
+    transport.trigger("product_modules_changed", { bots_enabled: true, ai_enabled: true, avaturn_enabled: true });
+    const epoch = hub.botChatCapabilityEpoch;
+    transport.trigger("avaturn_capabilities_changed", payload);
+    t.deepEqual(hub.productModules, { bots_enabled: false, ai_enabled: false, avaturn_enabled: false });
+    t.is(hub.botChatCapabilityEpoch, epoch + 1);
+  }
+  const epoch = hub.botChatCapabilityEpoch;
+  transport.trigger("avaturn_capabilities_changed", { bots_enabled: true, ai_enabled: true, avaturn_enabled: true });
+  t.deepEqual(hub.productModules, { bots_enabled: false, ai_enabled: false, avaturn_enabled: false });
+  t.is(hub.botChatCapabilityEpoch, epoch + 1);
+});
+
 test.serial(
   "a projection listener failure cannot skip later OFF revocation or the existing chat admission rotation",
   t => {

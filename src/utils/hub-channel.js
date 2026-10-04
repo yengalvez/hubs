@@ -174,6 +174,7 @@ export default class HubChannel extends EventTarget {
     this.waypointReservations.setChannel(channel);
     this.configureProductModules(null);
     channel.on("product_modules_changed", this.configureProductModules);
+    channel.on("avaturn_capabilities_changed", this.configureAvaturnCapabilities);
     this.bindProductModuleDisconnect(channel);
   }
 
@@ -184,6 +185,27 @@ export default class HubChannel extends EventTarget {
     channel.onClose(revoke);
     channel.onError(revoke);
   }
+
+  configureAvaturnCapabilities = capabilities => {
+    // Only a complete creator-only snapshot may preserve chat admission.
+    // Drift or malformed data cannot use this event to grant bots/IA authority.
+    const creatorOnly =
+      capabilities !== null &&
+      typeof capabilities === "object" &&
+      !Array.isArray(capabilities) &&
+      Object.keys(capabilities).length === 3 &&
+      ["bots_enabled", "ai_enabled", "avaturn_enabled"].every(
+        key => Object.prototype.hasOwnProperty.call(capabilities, key) && typeof capabilities[key] === "boolean"
+      ) &&
+      capabilities.bots_enabled === this.productModules.bots_enabled &&
+      capabilities.ai_enabled === this.productModules.ai_enabled;
+    if (!creatorOnly) {
+      this.configureProductModules(null);
+      return;
+    }
+    this.productModules = { ...this.productModules, avaturn_enabled: capabilities.avaturn_enabled };
+    configs.setProductModules(this.productModules);
+  };
 
   configureProductModules = capabilities => {
     this.productModules = {
